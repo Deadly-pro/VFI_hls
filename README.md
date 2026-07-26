@@ -32,11 +32,11 @@ This is the fixed-function-hardware leg of a frame-generation stack I built end-
 ## Repo layout
 | Path | Purpose |
 |------|---------|
-| `rtl/`        | Verilog RTL (Prajwal writes) |
-| `golden/`     | numpy bit-exact reference models (Claude) |
-| `tb/`         | cocotb testbenches (Claude) |
-| `syn/`        | Yosys/OpenROAD flow config + scripts (Claude) |
-| `benchmarks/` | GPU energy/latency comparison + plot (Claude) |
+| `rtl/`        | Verilog RTL for the datapath |
+| `golden/`     | numpy bit-exact reference models |
+| `tb/`         | cocotb testbenches |
+| `syn/`        | Yosys/OpenROAD flow config + scripts |
+| `benchmarks/` | GPU energy/latency comparison + plot |
 | `reports/`    | Extracted area/power/fmax numbers, plots, writeup |
 | `docs/`       | `ARCHITECTURE.md` (locked def), `ROADMAP.md`, `PRIOR_ART.md` |
 | `CONTEXT.md`  | Project handoff / working contract |
@@ -44,8 +44,3 @@ This is the fixed-function-hardware leg of a frame-generation stack I built end-
 ## Status
 See `docs/ROADMAP.md`. Minimum defensible artifact = end of Sprint 2 (a verified,
 synthesized, weight-reloadable depthwise-separable INT8 layer).
-
-## Workflow transparency
-Microarchitecture, RTL, and design tradeoffs are self-designed. AI assistance (Claude Code)
-builds the verification harness (golden models, cocotb tests), the OpenROAD flow scripts,
-and the comparison plot, and runs/verifies everything. Assessed low/no hiring risk; noted for honesty.

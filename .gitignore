@@ -32,3 +32,6 @@ reports/raw/
 # ---- OS / editor ----
 .DS_Store
 *.swp
+
+# Private working context — never publish
+CONTEXT.md

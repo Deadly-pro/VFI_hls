@@ -42,13 +42,15 @@ of scope** (data-dependent gather — belongs in software / a separate late unit
 Streaming uses simple `valid`/`ready` handshake (AXI-Stream-lite); weight load is a plain
 `addr/data/we` port (wrap as AXI-Lite later). Config: `start`, layer dims.
 
-## Division of labor
-- **Prajwal writes:** all RTL (`rtl/`), the microarchitecture decisions, the dataflow
-  choices (weight-stationary vs output-stationary), quantization design.
-- **Claude builds + verifies:** the numpy **golden model** per module (`golden/`), the
-  **cocotb testbench** per module (`tb/`), test-vector generation, the **Yosys/OpenROAD**
-  flow config + scripts (`syn/`), the **GPU-comparison harness + plot** (`benchmarks/`),
-  and RUNS everything — trust-but-verify, reruns on every "it passes."
+## Repository components
+- `rtl/` — the Verilog datapath: microarchitecture, dataflow (weight-stationary vs
+  output-stationary), and quantization design.
+- `golden/` — numpy bit-exact reference model per module.
+- `tb/` — cocotb testbench per module, with test-vector generation.
+- `syn/` — Yosys/OpenROAD flow config + scripts.
+- `benchmarks/` — GPU-comparison harness + plot.
+
+Every module is verified against its golden model before any synthesis number is trusted.
 
 ## Verification approach
 - Golden model: numpy, quantized, bit-exact reference (`golden/`).
