@@ -1,0 +1,34 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env310/
+.python-version
+.ipynb_checkpoints/
+
+# ---- hls4ml / Vitis HLS generated projects (large, regenerable) ----
+# Keep the *scripts* that generate these, ignore the generated trees.
+hls/*_prj/
+hls/**/myproject_prj/
+*.log
+*.jou
+vivado*.str
+.Xil/
+*_prj/
+
+# ---- Model artifacts (regenerable; keep small final weights if you choose) ----
+*.h5
+*.keras
+*.ckpt
+*.pb
+data/*
+!data/.keep
+
+# ---- Reports: keep the extracted numbers + plots, ignore raw tool dumps ----
+reports/raw/
+
+# ---- OS / editor ----
+.DS_Store
+*.swp
