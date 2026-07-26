@@ -1,9 +1,11 @@
 # VFI-DL Python environment — golden models + cocotb testbenches + comparison plots.
 # This project is RTL-first; Python is only for verification and analysis.
-# Works on modern Python (3.11–3.13). Create an isolated venv:
+# IMPORTANT: use Python 3.12 (or any 3.11–3.13). cocotb caps at 3.13, and the
+# system python here is 3.14 — do NOT build the venv with `python3`.
 #
-#   python3 -m venv .venv && source .venv/bin/activate
-#   pip install -r requirements.txt
+#   sudo dnf install -y python3.12
+#   python3.12 -m venv .venv && source .venv/bin/activate
+#   pip install --upgrade pip && pip install -r requirements.txt
 #
 # System tools (install via dnf / OpenROAD-flow-scripts, NOT pip):
 #   verilator, iverilog, yosys, and OpenROAD (see docs/ROADMAP.md Sprint 0).
