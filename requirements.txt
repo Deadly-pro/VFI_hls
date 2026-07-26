@@ -1,22 +1,15 @@
-# hls4ml-vfi environment.
-# IMPORTANT: create this env on Python 3.10 or 3.11 ONLY.
-# System python here is 3.14, which the TF/QKeras/hls4ml stack does NOT support.
+# VFI-DL Python environment — golden models + cocotb testbenches + comparison plots.
+# This project is RTL-first; Python is only for verification and analysis.
+# Works on modern Python (3.11–3.13). Create an isolated venv:
 #
-#   pyenv install 3.10.14   (or use a conda/mamba env)
-#   python3.10 -m venv .venv && source .venv/bin/activate
+#   python3 -m venv .venv && source .venv/bin/activate
 #   pip install -r requirements.txt
 #
-# Versions below are known-compatible; pin exactly once the toolchain de-risk passes.
+# System tools (install via dnf / OpenROAD-flow-scripts, NOT pip):
+#   verilator, iverilog, yosys, and OpenROAD (see docs/ROADMAP.md Sprint 0).
 
-tensorflow==2.14.*
-qkeras==0.9.0
-hls4ml==0.8.1
-numpy<2.0
-scipy
+numpy
+cocotb>=1.8
+cocotb-bus
 matplotlib
-scikit-image      # PSNR/SSIM metrics for the upscaler
-pillow
-jupyter
-
-# GPU/CPU baseline (the JCSSE-tied comparison run)
-torch             # install the CUDA build matching your driver separately if needed
+pytest            # cocotb test runner integration

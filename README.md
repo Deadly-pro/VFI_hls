@@ -1,50 +1,51 @@
-# hls4ml-vfi — A Fixed-Function FPGA Datapath for Neural Upscaling ("Hardware DLSS block")
+# VFI-DL — A Deep-Learning Inference Datapath in Verilog
 
-Mapping the **upsampling stage of video frame generation** to an FPGA datapath with
-[hls4ml](https://fastmachinelearning.org/hls4ml/), then reporting real synthesis
-numbers and a CPU vs GPU vs FPGA performance comparison.
+A **weight-reloadable, fixed-architecture INT8 CNN inference datapath**, hand-written in
+Verilog RTL, verified bit-exact in simulation, and taken through the open-source
+**Yosys + OpenROAD** ASIC flow for real **area / power / fmax** — then benchmarked against
+a GPU on **energy-per-frame and latency determinism**.
 
-> **What this is (the one-sentence framing):** I took a frame-generation network from my
-> published work, mapped its upsampling core to an FPGA datapath with hls4ml, and
-> produced real Vitis HLS synthesis numbers plus a CPU/GPU/FPGA performance comparison.
+> The datapath implements the compute-dominant CNN backbone of my published VFI model
+> ("Open-Frame-gen / Nano"). No FPGA, no hls4ml — hand-written RTL, open silicon flow.
 
-This is the fixed-function-hardware leg of a three-part frame-generation stack:
+This is the fixed-function-hardware leg of a frame-generation stack I built end-to-end:
 - **Algorithm** — "Open-Frame-gen" (JCSSE 2026).
-- **SIMT GPU** to run it — the Omni-RISC APU (RV32IM core, separate repo).
-- **Fixed-function FPGA datapath** to accelerate the upscaling — *this repo*.
+- **SIMT GPU** in RTL to run it — the Omni-RISC APU (separate repo).
+- **Fixed-function DL inference datapath** in RTL — *this repo*.
 
-## Scope (deliberately tight — see `CONTEXT.md` §4)
-- **Synthesize the UPSCALER, not full temporal VFI.** A tiny ESPCN / FSRCNN-small
-  sub-pixel ×2 upscaler (single-channel). Temporal interpolation is the *motivation*;
-  the upscaler is what actually goes through hls4ml. Optical-flow/warping chokes hls4ml.
-- **Deliverable = a report with real numbers + one comparison plot, not a live demo.**
-  Quantized model → hls4ml → Vitis HLS csynth → latency / II / DSP-BRAM-LUT-FF →
-  CPU/GPU/FPGA comparison plot. Defensible at ~30% built.
+## Scope (locked — see `docs/ARCHITECTURE.md`)
+- **Accelerate the CNN backbone**, not full temporal VFI. The `grid_sample` warp is a
+  data-dependent gather and stays out of the RTL.
+- **INT8 fixed-point**, symmetric per-tensor. Float is out.
+- **Deliverable = verified RTL + OpenROAD area/power/fmax + one GPU-comparison plot + a
+  1–2 page writeup.** Every number is backed by a passing bit-exact test.
 
-## Target
-- **FPGA:** Xilinx Artix-7 **XC7A100T** (~240 DSP48E1, ~135 BRAM) — same board as the APU.
-- **Tooling:** Vitis/Vivado HLS 2023.x; Python stack (TF/QKeras/hls4ml) on **Python 3.10/3.11**.
+## Toolchain (all open, runs on Fedora)
+| Stage | Tool |
+|-------|------|
+| Golden model | numpy (`golden/`) |
+| RTL | hand-written Verilog (`rtl/`) |
+| Verification | cocotb + Verilator/Icarus (`tb/`) |
+| Synthesis + P&R | Yosys + OpenROAD-flow-scripts (`syn/`) |
+| GPU comparison | Python + matplotlib (`benchmarks/`) |
 
 ## Repo layout
 | Path | Purpose |
 |------|---------|
-| `models/`     | Keras/QKeras model definitions + training |
-| `hls/`        | hls4ml conversion scripts (generated `*_prj/` trees are gitignored) |
-| `benchmarks/` | CPU/GPU/FPGA comparison harness + plotting |
-| `reports/`    | Extracted csynth numbers, plots, writeup |
-| `docs/`       | Roadmap, design notes |
-| `CONTEXT.md`  | Full project handoff / working contract |
+| `rtl/`        | Verilog RTL (Prajwal writes) |
+| `golden/`     | numpy bit-exact reference models (Claude) |
+| `tb/`         | cocotb testbenches (Claude) |
+| `syn/`        | Yosys/OpenROAD flow config + scripts (Claude) |
+| `benchmarks/` | GPU energy/latency comparison + plot (Claude) |
+| `reports/`    | Extracted area/power/fmax numbers, plots, writeup |
+| `docs/`       | `ARCHITECTURE.md` (locked def), `ROADMAP.md`, `PRIOR_ART.md` |
+| `CONTEXT.md`  | Project handoff / working contract |
 
-## Status — minimal deliverable checklist
-- [ ] Toolchain de-risk: 2-layer QKeras dense net → hls4ml → csynth report exists.
-- [ ] Tiny upsampler (ESPCN/FSRCNN-small, ×2, single-channel) trained + quantized.
-- [ ] hls4ml conversion clean; csynth fits XC7A100T (DSP/BRAM within budget).
-- [ ] Numbers captured: latency (cycles/ns), II, resource utilization.
-- [ ] Baselines: CPU + GPU inference latency/throughput.
-- [ ] One comparison plot (latency/throughput, ideally perf/W) across CPU/GPU/FPGA.
-- [ ] Short writeup (1–2 pp): motivation, what was synthesized, numbers, tradeoffs, future work.
+## Status
+See `docs/ROADMAP.md`. Minimum defensible artifact = end of Sprint 2 (a verified,
+synthesized, weight-reloadable depthwise-separable INT8 layer).
 
 ## Workflow transparency
-The model architecture, quantization choices, and design tradeoffs are self-designed.
-AI assistance (Claude Code) is used for the benchmarking/verification harness and for
-sanity-checking the hls4ml conversion. Assessed as low/no hiring risk; noted here for honesty.
+Microarchitecture, RTL, and design tradeoffs are self-designed. AI assistance (Claude Code)
+builds the verification harness (golden models, cocotb tests), the OpenROAD flow scripts,
+and the comparison plot, and runs/verifies everything. Assessed low/no hiring risk; noted for honesty.
