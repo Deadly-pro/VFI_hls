@@ -48,10 +48,26 @@ async def test_load_then_read(dut):
     ref = WeightMemRef(depth)
     random.seed(0xBEEF)
 
-    # Phase 1 — load every address with a known signed value.
-    for a in range(depth):
+    # Prime the registered read before checking it. Memory contents are
+    # intentionally unknown until every address has been loaded below.
+    # First write address 0. The following clock is the first defined read;
+    # both the golden model and DUT see address 0's pre-write value (unknown in
+    # hardware), so begin comparisons only after this seeding write.
+    dut.wl_we.value = 1
+    dut.wl_addr.value = 0
+    dut.wl_data.value = -128
+    dut.rd_addr.value = 0
+    await RisingEdge(dut.clk)
+    ref.step(1, 0, -128, 0)
+    await Timer(1, "ns")
+
+    # Phase 1 — load every remaining address with a known signed value.
+    for a in range(1, depth):
         w = ((a * 7) % 256) - 128          # deterministic spread over [-128,127]
         await step(dut, ref, 1, a, w, 0, i=a)
+
+    # Commit the final write and sample known address 0 before random traffic.
+    await step(dut, ref, 0, 0, 0, 0, i=depth)
 
     # Phase 2 — random reads + occasional runtime updates.
     for i in range(3000):
