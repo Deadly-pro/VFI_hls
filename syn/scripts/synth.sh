@@ -24,17 +24,26 @@ case $TOP in
     line_buffer)
         SRC="$PROJECT_ROOT/rtl/line_buffer.v"
         ;;
+    line_buffer_stream)
+        SRC="$PROJECT_ROOT/rtl/line_buffer_stream.v"
+        ;;
     dw_conv3x3)
         SRC="$PROJECT_ROOT/rtl/dw_conv3x3.v $PROJECT_ROOT/rtl/line_buffer.v $PROJECT_ROOT/rtl/requantize.v"
         ;;
     pw_conv1x1)
         SRC="$PROJECT_ROOT/rtl/pw_conv1x1.v"
         ;;
+    pw_conv1x1_parallel)
+        SRC="$PROJECT_ROOT/rtl/pw_conv1x1_parallel.v"
+        ;;
     ds_conv_layer)
         SRC="$PROJECT_ROOT/rtl/ds_conv_layer.v $PROJECT_ROOT/rtl/dw_conv3x3.v $PROJECT_ROOT/rtl/line_buffer.v $PROJECT_ROOT/rtl/requantize.v $PROJECT_ROOT/rtl/pw_conv1x1.v"
         ;;
     ds_conv_layer_integrated)
         SRC="$PROJECT_ROOT/rtl/ds_conv_layer_integrated.v $PROJECT_ROOT/rtl/dw_conv3x3.v $PROJECT_ROOT/rtl/line_buffer.v $PROJECT_ROOT/rtl/requantize.v $PROJECT_ROOT/rtl/pw_conv1x1.v $PROJECT_ROOT/rtl/weight_mem.v"
+        ;;
+    encoder_slice)
+        SRC="$PROJECT_ROOT/rtl/encoder_slice.v $PROJECT_ROOT/rtl/ds_conv_layer_integrated.v $PROJECT_ROOT/rtl/dw_conv3x3.v $PROJECT_ROOT/rtl/line_buffer.v $PROJECT_ROOT/rtl/requantize.v $PROJECT_ROOT/rtl/pw_conv1x1.v $PROJECT_ROOT/rtl/weight_mem.v"
         ;;
     *)
         echo "Unknown TOP: $TOP"

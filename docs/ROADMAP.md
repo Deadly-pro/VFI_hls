@@ -30,7 +30,11 @@ Sprints, risk-ordered. The minimum defensible artifact is the end of **Sprint 2*
 | `ds_conv_layer_integrated` | 8,561 | 55,420.76 | 9.55 | **104.7 MHz** | 2.71 |
 
 ## Sprint 3 — Scale + deliverable (IN PROGRESS)
-- [ ] Parameterize channels/dims; stack ≥2 layers (mini encoder slice).
+- [x] `encoder_slice` — two-layer strided encoder (E1→E2) with stride-2 downsampling; RTL + testbench + synthesis integration
+- [x] `export_weights.py` — PyTorch ONNX → INT8 .hex exporter for weight_mem (E1/E2 layers); ready to run
+- [x] `line_buffer_stream` — streaming 2-line FIFO 3×3 window extractor (1 pix-in / 1 win-out); RTL + testbench + synthesis
+- [x] `pw_conv1x1_parallel` — parallel MAC array (PARALLEL_CO=2/4); closes pw_conv1x1 critical path
+- [ ] Run weight export and integrate .hex loads into encoder_slice testbench
 - [ ] GPU-comparison plot: energy/frame + latency determinism vs paper's RTX 3050 numbers.
 - [ ] 1–2 page writeup: what was built, verification, silicon numbers, the honest GPU comparison, and future work (warp unit, weight-reload as field-update, NPU direction).
 

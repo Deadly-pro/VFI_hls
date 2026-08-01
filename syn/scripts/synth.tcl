@@ -25,14 +25,20 @@ set src_map(mac_int8)                    [list $RTL_DIR/mac_int8.v]
 set src_map(weight_mem)                  [list $RTL_DIR/weight_mem.v]
 set src_map(requantize)                  [list $RTL_DIR/requantize.v]
 set src_map(line_buffer)                 [list $RTL_DIR/line_buffer.v]
+set src_map(line_buffer_stream)          [list $RTL_DIR/line_buffer_stream.v]
 set src_map(dw_conv3x3)                  [list $RTL_DIR/dw_conv3x3.v $RTL_DIR/line_buffer.v $RTL_DIR/requantize.v]
 set src_map(pw_conv1x1)                  [list $RTL_DIR/pw_conv1x1.v]
+set src_map(pw_conv1x1_parallel)         [list $RTL_DIR/pw_conv1x1_parallel.v]
 set src_map(ds_conv_layer)               [list $RTL_DIR/ds_conv_layer.v $RTL_DIR/dw_conv3x3.v \
                                                  $RTL_DIR/line_buffer.v $RTL_DIR/requantize.v \
                                                  $RTL_DIR/pw_conv1x1.v]
 set src_map(ds_conv_layer_integrated)    [list $RTL_DIR/ds_conv_layer_integrated.v $RTL_DIR/dw_conv3x3.v \
                                                  $RTL_DIR/line_buffer.v $RTL_DIR/requantize.v \
                                                  $RTL_DIR/pw_conv1x1.v $RTL_DIR/weight_mem.v]
+set src_map(encoder_slice)               [list $RTL_DIR/encoder_slice.v $RTL_DIR/ds_conv_layer_integrated.v \
+                                                 $RTL_DIR/dw_conv3x3.v $RTL_DIR/line_buffer.v \
+                                                 $RTL_DIR/requantize.v $RTL_DIR/pw_conv1x1.v \
+                                                 $RTL_DIR/weight_mem.v]
 
 if {![info exists src_map($TOP)]} {
     puts "ERROR: unknown TOP=$TOP"
