@@ -1,7 +1,6 @@
 <testsuites name="results">
   <testsuite name="all" package="all">
-    <property name="random_seed" value="1785050705" />
-    <testcase name="test_directed" classname="test_mac_int8" file="/home/deadly-pro/VFI_hls/tb/test_mac_int8.py" lineno="55" time="0.001077890396118164" sim_time_ns="81.0" ratio_time="75146.78699402788" />
-    <testcase name="test_random" classname="test_mac_int8" file="/home/deadly-pro/VFI_hls/tb/test_mac_int8.py" lineno="74" time="0.143416166305542" sim_time_ns="20041.0" ratio_time="139740.1737632807" />
+    <property name="random_seed" value="1785329677" />
+    <testcase name="test_ds_conv" classname="test_ds_conv_layer" file="/home/deadly-pro/VFI_hls/tb/test_ds_conv_layer.py" lineno="43" time="0.14785146713256836" sim_time_ns="24591.0" ratio_time="166322.32656812883" />
   </testsuite>
 </testsuites>
