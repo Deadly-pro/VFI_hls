@@ -39,6 +39,9 @@ set src_map(encoder_slice)               [list $RTL_DIR/encoder_slice.v $RTL_DIR
                                                  $RTL_DIR/dw_conv3x3.v $RTL_DIR/line_buffer.v \
                                                  $RTL_DIR/requantize.v $RTL_DIR/pw_conv1x1.v \
                                                  $RTL_DIR/weight_mem.v]
+set src_map(warp_unit)                   [list $RTL_DIR/warp_unit.v]
+set src_map(blend_unit)                  [list $RTL_DIR/blend_unit.v]
+set src_map(vfi_synth)                   [list $RTL_DIR/vfi_synth.v $RTL_DIR/warp_unit.v $RTL_DIR/blend_unit.v]
 
 if {![info exists src_map($TOP)]} {
     puts "ERROR: unknown TOP=$TOP"

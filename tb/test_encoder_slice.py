@@ -57,8 +57,8 @@ async def test_encoder_slice_two_layer(dut):
     E2_NUM_PX = E1_OUT_W * E1_OUT_H
     TOTAL_OUT_PX = E2_OUT_W * E2_OUT_H
 
-    random.seed(0xENC0)
-    np.random.seed(0xENC0)
+    random.seed(0xE0C0)
+    np.random.seed(0xE0C0)
 
     # ---- Generate test data ----
     # Input: 8×8×C_IN (e.g., 6 channels for frame pair)
@@ -238,8 +238,8 @@ async def test_encoder_slice_e1_only(dut):
     E1_OUT_W = IMG_W // 2
     E1_OUT_H = IMG_H // 2
 
-    random.seed(0xE1ONLY)
-    np.random.seed(0xE1ONLY)
+    random.seed(0xE10E10)
+    np.random.seed(0xE10E10)
 
     image = np.random.randint(-128, 127, size=(IMG_H, IMG_W, C_IN), dtype=np.int8)
     e1_dw_kernel = np.random.randint(-128, 127, size=(C_IN, 3, 3), dtype=np.int8)

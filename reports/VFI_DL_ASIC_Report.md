@@ -96,6 +96,28 @@ pw_conv1x1_parallel — PARALLEL_CO-way MAC array (closes serial bottleneck)
 
 ---
 
+## 3.5 Sprint 4: VFI Warp + Blend Datapath (Synthesized)
+
+| Module | Cell Count | Registers | Notes |
+|--------|------------|-----------|-------|
+| `warp_unit` | 22,791 | 2,072 (16×16×8-bit frame buf) | Bilinear grid_sample, align_corners=1, border clamp |
+| `blend_unit` | 793 | 9 | Mask blend `(m·a + (255−m)·b + 127) >> 8` |
+| **`vfi_synth`** | **136,452** | 12,488 | 6× warp + 3× blend, NCH=3 |
+
+Frame buffers dominate `vfi_synth` (2 frames × NCH × W×H×8-bit registers). At
+the demo resolution (64×64×3) this is the right tradeoff for border-pad
+exactness; the 2-line streaming buffer upgrade path for 1080p is documented in
+`docs/ARCHITECTURE.md`.
+
+### Sprint 4 Verification
+- **7 additional cocotb suites** (warp_unit ×3, blend_unit ×2, vfi_synth ×2)
+  all bit-exact vs `golden/grid_sample_ref.py` and `golden/vfi_synth_ref.py`
+- **End-to-end demo** (`tools/vfi_demo.py --rtl`): user t/t+1 frames →
+  ONNX flow+mask → RTL warp+blend → interpolated frame, verified bit-exact
+  against the fixed-point golden, then compared to the FP16 ONNX reference
+
+---
+
 ## 4. GPU Comparison Methodology (Honest Boundaries)
 
 ### 4.1 What We Compare

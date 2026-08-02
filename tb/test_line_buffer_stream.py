@@ -28,8 +28,8 @@ async def test_line_buffer_stream(dut):
     NUM_PX = IMG_W * IMG_H
 
     # Generate test image
-    random.seed(0xSTREAM)
-    np.random.seed(0xSTREAM)
+    random.seed(0x51E4E4)
+    np.random.seed(0x51E4E4)
     image = np.random.randint(-128, 127, size=(IMG_H, IMG_W), dtype=np.int8)
 
     # Golden reference (whole-frame, same as before)

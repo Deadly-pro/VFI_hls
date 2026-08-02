@@ -35,3 +35,12 @@ reports/raw/
 
 # Private working context — never publish
 CONTEXT.md
+
+# ---- VFI demo / synthesis generated artifacts (regenerable) ----
+weights/
+syn/output/
+syn/reports/
+tb/sim_build/
+tb/results.xml
+syn/scripts/abc.history
+samples/mid_*

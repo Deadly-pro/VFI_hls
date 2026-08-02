@@ -27,8 +27,8 @@ async def test_pw_conv1x1_parallel(dut):
     C_OUT = int(dut.C_OUT.value)
     PARALLEL_CO = int(dut.PARALLEL_CO.value)
 
-    random.seed(0xPW_PAR)
-    np.random.seed(0xPW_PAR)
+    random.seed(0x5035A0)
+    np.random.seed(0x5035A0)
 
     # Test image: 4x4 spatial, C_IN channels
     H, W = 4, 4

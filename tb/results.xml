@@ -1,6 +1,0 @@
-<testsuites name="results">
-  <testsuite name="all" package="all">
-    <property name="random_seed" value="1785329677" />
-    <testcase name="test_ds_conv" classname="test_ds_conv_layer" file="/home/deadly-pro/VFI_hls/tb/test_ds_conv_layer.py" lineno="43" time="0.14785146713256836" sim_time_ns="24591.0" ratio_time="166322.32656812883" />
-  </testsuite>
-</testsuites>

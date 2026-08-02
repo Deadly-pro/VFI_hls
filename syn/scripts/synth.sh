@@ -45,6 +45,15 @@ case $TOP in
     encoder_slice)
         SRC="$PROJECT_ROOT/rtl/encoder_slice.v $PROJECT_ROOT/rtl/ds_conv_layer_integrated.v $PROJECT_ROOT/rtl/dw_conv3x3.v $PROJECT_ROOT/rtl/line_buffer.v $PROJECT_ROOT/rtl/requantize.v $PROJECT_ROOT/rtl/pw_conv1x1.v $PROJECT_ROOT/rtl/weight_mem.v"
         ;;
+    warp_unit)
+        SRC="$PROJECT_ROOT/rtl/warp_unit.v"
+        ;;
+    blend_unit)
+        SRC="$PROJECT_ROOT/rtl/blend_unit.v"
+        ;;
+    vfi_synth)
+        SRC="$PROJECT_ROOT/rtl/vfi_synth.v $PROJECT_ROOT/rtl/warp_unit.v $PROJECT_ROOT/rtl/blend_unit.v"
+        ;;
     *)
         echo "Unknown TOP: $TOP"
         exit 1
@@ -78,14 +87,14 @@ if [ -n "$SKY130_LIB" ]; then
 synth -top $TOP
 dfflibmap -liberty $SKY130_LIB
 abc -liberty $SKY130_LIB
-stat -liberty $SKY130_LIB > $SCRIPT_DIR/../reports/${TOP}_stat.txt
+tee -o $SCRIPT_DIR/../reports/${TOP}_stat.txt stat -liberty $SKY130_LIB
 write_verilog $SCRIPT_DIR/../output/${TOP}.v
 "
 else
     echo "Sky130 PDK not found — using generic synthesis"
     YOSYS_SCRIPT="$YOSYS_SCRIPT
 synth -top $TOP
-stat > $SCRIPT_DIR/../reports/${TOP}_stat.txt
+tee -o $SCRIPT_DIR/../reports/${TOP}_stat.txt stat
 write_verilog $SCRIPT_DIR/../output/${TOP}.v
 "
 fi

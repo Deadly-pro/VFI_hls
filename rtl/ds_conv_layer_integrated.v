@@ -46,6 +46,9 @@ module ds_conv_layer_integrated #(
     localparam DW_WEIGHT_DEPTH  = DW_BIAS_OFFSET + C_IN;
 
     wire signed [7:0] dw_mem_rdata;
+    reg [DW_MEM_AW-1:0] dw_rd_addr;
+    reg [PW_MEM_AW-1:0] pw_rd_addr;
+
     weight_mem #(
         .DEPTH(DW_MEM_DEPTH),
         .AW(DW_MEM_AW)
@@ -89,7 +92,6 @@ module ds_conv_layer_integrated #(
     end
 
     // DW weight read address generator
-    reg [DW_MEM_AW-1:0] dw_rd_addr;
     reg [3:0]           dw_kidx [0:C_IN-1]; // kernel index 0..8 per channel
     reg                 dw_bias_phase [0:C_IN-1];
 
@@ -190,7 +192,6 @@ module ds_conv_layer_integrated #(
     end
 
     // ---- PW weight read address generator ----
-    reg [PW_MEM_AW-1:0] pw_rd_addr;
     reg signed [7:0] pw_kernels [0:C_OUT-1][0:C_IN-1];
     reg signed [31:0] pw_biases [0:C_OUT-1];
 
