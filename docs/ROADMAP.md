@@ -51,20 +51,19 @@ Sprints, risk-ordered. The minimum defensible artifact is the end of **Sprint 2*
 | `blend_unit` | 793 | 9 | 1-cycle mask blend |
 | `vfi_synth` (NCH=3) | 136,452 | 12,488 | 6× warp + 3× blend |
 
-## Known issues (Sprint 3 debt — NOT in the passing gate)
+## Known issues (Sprint 3 debt — all RESOLVED)
 These suites were committed in Sprint 3 without ever passing the aggregate
-regression. They fail on real RTL bugs, not test noise, and are tracked here
-so the repo states honestly which modules are verified vs. work-in-progress:
+regression. All four have since been fixed (root causes below) and are now
+part of the passing `run_all_tests.sh` gate:
 
-| Suite | Failure | Status |
-|---|---|---|
-| `test_ds_conv_layer_integrated` | X on `pixel_out` (weight_mem read before valid output) | needs RTL fix |
-| `test_encoder_slice` | depends on integrated; also `wl_addr` overflows 10-bit bus | blocked on above |
-| `test_line_buffer_stream` | RTL cannot form correct SAME-padded 3×3 window (2-line FIFO + 3-tap shift lacks the 3rd row) | needs redesign |
-| `test_pw_conv1x1_parallel` | no outputs collected (handshake/timing) | needs RTL fix |
+| Suite | Root cause fixed |
+|---|---|
+| `test_ds_conv_layer_integrated` | block-scoped `integer x = expr` inits → X weight regs (iverilog -g2012); DW/PW weight-address collision; golden needed 8-bit bias quantization; `dw_done` waited only on channel 0 so PW read unwritten `dw_buf` |
+| `test_encoder_slice` | E1/E2 shared the wl bus with colliding address spaces (added `WL_BASE`); missing E2 stride-2 filter; block-scoped-integer X bug; slow serial PW at C_OUT=96 |
+| `test_line_buffer_stream` | 2-line FIFO couldn't form a SAME-padded 3×3 window — rewrote with 3 cyclic line buffers + independent output counter |
+| `test_pw_conv1x1_parallel` | `S_OUTPUT=2'd4` truncated to 0 (collided with S_IDLE); block-scoped-integer X in MAC; per-position handshake in test |
 
-`./run_all_tests.sh` runs the 10 verified suites (Sprint 0–2 + Sprint 4 VFI).
-The rows above are the honest backlog for the next sprint.
+`./run_all_tests.sh` runs the full verified suite (Sprint 0–4).
 
 ## Definition of done
 A repo with: verified RTL for a weight-reloadable INT8 depthwise-separable layer, cocotb tests proving bit-exactness, an OpenROAD/Sky130 area/power/fmax report, one GPU-comparison plot, and the writeup. Defensible because every number is backed by a passing bit-exact test.

@@ -1,6 +1,10 @@
 // line_buffer_stream — Streaming 3x3 window extractor with SAME padding.
-// Two-line FIFO architecture (not full-frame capture).
-// Enables 1-pixel-in / 1-window-out throughput after initial latency.
+//
+// Three cyclic line buffers (each one full input row) hold the three window
+// rows. An independent output counter runs one row + one column behind the
+// input, so every window's corner pixel is already captured when the window is
+// emitted — no wait-states, no full-frame capture, O(W) memory.
+// Border windows are zero-padded (SAME), matching golden/line_buffer_ref.py.
 
 module line_buffer_stream #(
     parameter IMG_W = 8,
@@ -17,122 +21,86 @@ module line_buffer_stream #(
     output signed [7:0]      win_6, win_7, win_8
 );
 
-    localparam STRIDE = 1;
-    localparam KERNEL = 3;
-    localparam HALF_K = KERNEL >> 1;  // 1
+    localparam W = IMG_W;
+    localparam H = IMG_H;
 
-    // Two line buffers: each holds IMG_W pixels
-    reg signed [7:0] line_buf_0 [0:IMG_W-1];
-    reg signed [7:0] line_buf_1 [0:IMG_W-1];
+    // three cyclic row buffers; row x lives in row_buf[x % 3]
+    reg signed [7:0] row_buf [0:2][0:W-1];
 
-    // Column counter and row counter
-    reg [$clog2(IMG_W):0] col_cnt;
-    reg [$clog2(IMG_H):0] row_cnt;
+    reg [$clog2(H)-1:0] r;      // current input row
+    reg [$clog2(W)-1:0] c;      // current input column
+    reg                 first;  // captured at least one pixel
 
-    // Input shift register for current row (3 pixels wide)
-    reg signed [7:0] pix_sr [0:KERNEL-1];
+    // output window position (lags input by one row + one col)
+    reg [$clog2(H)-1:0] ov;
+    reg [$clog2(W)-1:0] oc;
+    reg                 emit;   // output counter running
+    reg                 done;
 
-    // Output position tracking
-    reg [$clog2(IMG_W):0] out_col;
-    reg [$clog2(IMG_H):0] out_row;
-    reg                    frame_active;
-
-    // Pipeline registers for 3x3 window
-    reg signed [7:0] w0_r, w1_r, w2_r, w3_r, w4_r, w5_r, w6_r, w7_r, w8_r;
-    reg              valid_pipe [0:2];
-
-    // Input pixel shift register update
+    // ---- capture: store each input pixel into its row's buffer ----
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n || frame_start) begin
-            pix_sr[0] <= 8'sd0;
-            pix_sr[1] <= 8'sd0;
-            pix_sr[2] <= 8'sd0;
-            col_cnt   <= 0;
-            row_cnt   <= 0;
-            frame_active <= 1'b1;
-        end else if (frame_active && in_valid) begin
-            // Shift in new pixel
-            pix_sr[0] <= pix_sr[1];
-            pix_sr[1] <= pix_sr[2];
-            pix_sr[2] <= pixel_in;
-
-            if (col_cnt == IMG_W - 1) begin
-                col_cnt <= 0;
-                if (row_cnt == IMG_H - 1) begin
-                    row_cnt <= 0;
-                    frame_active <= 1'b0;
-                end else begin
-                    row_cnt <= row_cnt + 1;
-                end
+            r     <= 0;
+            c     <= 0;
+            first <= 1'b0;
+        end else if (in_valid) begin
+            first <= 1'b1;
+            row_buf[r % 3][c] <= pixel_in;
+            if (c == W - 1) begin
+                c <= 0;
+                if (r == H - 1) r <= 0; else r <= r + 1;
             end else begin
-                col_cnt <= col_cnt + 1;
+                c <= c + 1;
             end
         end
     end
 
-    // Line buffer write (delayed by 1 cycle to align with output)
-    always @(posedge clk) begin
-        if (in_valid) begin
-            if (row_cnt < IMG_H - 1) begin
-                line_buf_1[col_cnt] <= pix_sr[2];  // current pixel goes to line 1
-            end
-            if (row_cnt > 0) begin
-                line_buf_0[col_cnt] <= line_buf_1[col_cnt];  // line 1 shifts to line 0
-            end
-        end
-    end
-
-    // Output column/row tracking (output starts after 1 row + 1 col latency)
+    // ---- output counter: start one cycle after the first full corner is
+    // captured (input at (1,1)), then run row-major until all H*W windows ----
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n || frame_start) begin
-            out_col <= 0;
-            out_row <= 0;
-            valid_pipe[0] <= 1'b0;
-            valid_pipe[1] <= 1'b0;
-            valid_pipe[2] <= 1'b0;
+            ov <= 0; oc <= 0; emit <= 1'b0; done <= 1'b0;
         end else begin
-            valid_pipe[0] <= in_valid;
-            valid_pipe[1] <= valid_pipe[0];
-            valid_pipe[2] <= valid_pipe[1];
-
-            if (valid_pipe[2]) begin
-                if (out_col == IMG_W - 1) begin
-                    out_col <= 0;
-                    out_row <= out_row + 1;
+            if (emit && !done) begin
+                if (oc == W - 1) begin
+                    oc <= 0;
+                    if (ov == H - 1) done <= 1'b1; else ov <= ov + 1;
                 end else begin
-                    out_col <= out_col + 1;
+                    oc <= oc + 1;
                 end
             end
+            if (in_valid && r == 1 && c == 1)
+                emit <= 1'b1;   // starts emitting on the next cycle
         end
     end
 
-    // Combinational 3x3 window extraction with SAME padding (zero padding)
-    wire at_top    = (out_row == 0);
-    wire at_bottom = (out_row == IMG_H - 1);
-    wire at_left   = (out_col == 0);
-    wire at_right  = (out_col == IMG_W - 1);
+    // ---- generic SAME-padded 3x3 reader at window center (ov, oc) ----
+    wire signed [7:0] t0 = (ov == 0 || oc == 0)        ? 8'sd0 : row_buf[(ov-1) % 3][oc-1];
+    wire signed [7:0] t1 = (ov == 0)                   ? 8'sd0 : row_buf[(ov-1) % 3][oc];
+    wire signed [7:0] t2 = (ov == 0 || oc == W-1)      ? 8'sd0 : row_buf[(ov-1) % 3][oc+1];
+    wire signed [7:0] m0 = (oc == 0)                   ? 8'sd0 : row_buf[ov % 3][oc-1];
+    wire signed [7:0] m1 =                              row_buf[ov % 3][oc];
+    wire signed [7:0] m2 = (oc == W-1)                 ? 8'sd0 : row_buf[ov % 3][oc+1];
+    wire signed [7:0] b0 = (ov == H-1 || oc == 0)      ? 8'sd0 : row_buf[(ov+1) % 3][oc-1];
+    wire signed [7:0] b1 = (ov == H-1)                 ? 8'sd0 : row_buf[(ov+1) % 3][oc];
+    wire signed [7:0] b2 = (ov == H-1 || oc == W-1)    ? 8'sd0 : row_buf[(ov+1) % 3][oc+1];
 
-    // Row -1 (top padding or line_buf_0)
-    wire signed [7:0] r_m1_c_m1 = (at_top || at_left)   ? 8'sd0 : line_buf_0[out_col - 1];
-    wire signed [7:0] r_m1_c_0  = at_top                 ? 8'sd0 : line_buf_0[out_col];
-    wire signed [7:0] r_m1_c_p1 = (at_top || at_right)  ? 8'sd0 : line_buf_0[out_col + 1];
-
-    // Row 0 (current row from shift register)
-    wire signed [7:0] r_0_c_m1  = at_left  ? 8'sd0 : pix_sr[0];
-    wire signed [7:0] r_0_c_0   = pix_sr[1];
-    wire signed [7:0] r_0_c_p1  = at_right ? 8'sd0 : pix_sr[2];
-
-    // Row +1 (line_buf_1 or bottom padding)
-    wire signed [7:0] r_p1_c_m1 = (at_bottom || at_left)  ? 8'sd0 : line_buf_1[out_col - 1];
-    wire signed [7:0] r_p1_c_0  = at_bottom                ? 8'sd0 : line_buf_1[out_col];
-    wire signed [7:0] r_p1_c_p1 = (at_bottom || at_right) ? 8'sd0 : line_buf_1[out_col + 1];
-
-    // Pipeline the window for timing
-    always @(posedge clk) begin
-        w0_r <= r_m1_c_m1; w1_r <= r_m1_c_0; w2_r <= r_m1_c_p1;
-        w3_r <= r_0_c_m1;  w4_r <= r_0_c_0;  w5_r <= r_0_c_p1;
-        w6_r <= r_p1_c_m1; w7_r <= r_p1_c_0; w8_r <= r_p1_c_p1;
-        out_valid <= valid_pipe[2];
+    // register the window (output counter moves on the same edge)
+    reg signed [7:0] w0_r, w1_r, w2_r, w3_r, w4_r, w5_r, w6_r, w7_r, w8_r;
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n || frame_start) begin
+            out_valid <= 1'b0;
+            w0_r <= 0; w1_r <= 0; w2_r <= 0;
+            w3_r <= 0; w4_r <= 0; w5_r <= 0;
+            w6_r <= 0; w7_r <= 0; w8_r <= 0;
+        end else begin
+            out_valid <= emit && !done;
+            if (emit && !done) begin
+                w0_r <= t0; w1_r <= t1; w2_r <= t2;
+                w3_r <= m0; w4_r <= m1; w5_r <= m2;
+                w6_r <= b0; w7_r <= b1; w8_r <= b2;
+            end
+        end
     end
 
     assign win_0 = w0_r; assign win_1 = w1_r; assign win_2 = w2_r;

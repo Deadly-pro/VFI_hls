@@ -32,11 +32,11 @@ module pw_conv1x1_parallel #(
     reg [$clog2(C_IN)-1:0] in_idx;
 
     // Parallel MAC state
-    localparam S_IDLE    = 2'd0;
-    localparam S_LATCH   = 2'd1;
-    localparam S_MAC     = 2'd2;
-    localparam S_REQ     = 2'd3;
-    localparam S_OUTPUT  = 2'd4;
+    localparam S_IDLE    = 0;
+    localparam S_LATCH   = 1;
+    localparam S_MAC     = 2;
+    localparam S_REQ     = 3;
+    localparam S_OUTPUT  = 4;
 
     reg [2:0] state;
     reg [$clog2(CO_GROUPS)-1:0] group_idx;
@@ -119,10 +119,10 @@ module pw_conv1x1_parallel #(
 
                 S_MAC: begin
                     // Parallel MAC: all PARALLEL_CO channels accumulate in_buf[ci_idx] * weight
+                    // ponytail: direct index expr — block-scoped `integer co = ...` inits
+                    // are unreliable under iverilog -g2012 (produced X accumulators).
                     for (i = 0; i < PARALLEL_CO; i = i + 1) begin
-                        integer co = group_idx * PARALLEL_CO + i;
-                        integer w_idx = co * C_IN + ci_idx;
-                        acc[i] <= acc[i] + in_buf[ci_idx] * weight[w_idx];
+                        acc[i] <= acc[i] + in_buf[ci_idx] * weight[(group_idx * PARALLEL_CO + i) * C_IN + ci_idx];
                     end
 
                     if (ci_idx == C_IN - 1) begin

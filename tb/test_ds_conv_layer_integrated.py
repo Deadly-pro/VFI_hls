@@ -25,6 +25,17 @@ def read_signed(sig, bits: int) -> int:
     return v - (1 << bits) if v & (1 << (bits - 1)) else v
 
 
+def q8(v):
+    """Quantize a 32-bit bias through the RTL's 8-bit weight_mem port
+    (truncate to 8 bits, then sign-extend). Golden must match."""
+    x = int(v) & 0xFF
+    return x - 256 if x & 0x80 else x
+
+
+def q8_arr(a):
+    return np.array([q8(x) for x in a], dtype=np.int32)
+
+
 @cocotb.test()
 async def test_ds_conv_integrated_load_and_infer(dut):
     """Load weights, run inference, verify bit-exact vs golden."""
@@ -56,9 +67,11 @@ async def test_ds_conv_integrated_load_and_infer(dut):
     pw_shift = 0
 
     # ---- Compute golden reference ----
+    # The RTL loads biases through an 8-bit port (weight_mem), truncating to
+    # 8 bits + sign-extend. Match that quantization in the golden.
     golden_out = ds_conv_layer_golden(
-        image, dw_kernel, dw_bias, dw_m0, dw_shift,
-        pw_weight, pw_bias, pw_m0, pw_shift
+        image, dw_kernel, q8_arr(dw_bias), dw_m0, dw_shift,
+        pw_weight, q8_arr(pw_bias), pw_m0, pw_shift
     )  # shape [H, W, C_OUT]
     golden_flat = golden_out.reshape(-1).tolist()  # row-major, channel-interleaved
 
@@ -97,16 +110,17 @@ async def test_ds_conv_integrated_load_and_infer(dut):
         await RisingEdge(dut.clk)
 
     # ---- Phase 2: Load PW weights into weight_mem ----
-    # PW weight_mem starts at same address space (shared bus), but we use different offsets
-    # Layout: [co*C_IN + ci] for kernels, then [C_OUT*C_IN + co] for biases
+    # PW bank starts after the DW space (DW_WEIGHT_DEPTH = C_IN*9 + C_IN).
+    # Layout: [base + co*C_IN + ci] for kernels, then [base + C_OUT*C_IN + co] for biases
+    pw_base = C_IN * 9 + C_IN
     for co in range(C_OUT):
         for ci in range(C_IN):
-            addr = co * C_IN + ci
+            addr = pw_base + co * C_IN + ci
             dut.wl_addr.value = addr
             dut.wl_data.value = int(pw_weight[co, ci])
             await RisingEdge(dut.clk)
     for co in range(C_OUT):
-        addr = C_OUT * C_IN + co
+        addr = pw_base + C_OUT * C_IN + co
         dut.wl_addr.value = addr
         dut.wl_data.value = int(pw_bias[co]) & 0xFF
         await RisingEdge(dut.clk)
@@ -130,13 +144,15 @@ async def test_ds_conv_integrated_load_and_infer(dut):
     dut.in_valid.value = 0
 
     # ---- Phase 4: Collect outputs ----
+    # out_last pulses at the end of every position (per C_OUT channels), not
+    # once per frame — so collect until the expected count, not until out_last.
     outputs = []
-    timeout_cycles = (IMG_W * IMG_H * C_OUT) + 200  # generous timeout
+    timeout_cycles = (IMG_W * IMG_H) * (C_IN * 4 + C_OUT) + 1000  # PW phase is serial and slow
     for _ in range(timeout_cycles):
         await RisingEdge(dut.clk)
         if dut.out_valid.value == 1:
             outputs.append(read_signed(dut.pixel_out, 8))
-            if dut.out_last.value == 1:
+            if len(outputs) == len(golden_flat):
                 break
 
     # ---- Verify ----
@@ -156,6 +172,7 @@ async def test_ds_conv_integrated_weight_reload(dut):
     IMG_H = int(dut.IMG_H.value)
     C_IN  = int(dut.C_IN.value)
     C_OUT = int(dut.C_OUT.value)
+    NUM_PX = IMG_W * IMG_H
 
     random.seed(0xBEEF)
     np.random.seed(0xBEEF)
@@ -173,8 +190,8 @@ async def test_ds_conv_integrated_weight_reload(dut):
     pw_shift = 0
 
     golden_1 = ds_conv_layer_golden(
-        image, dw_kernel_1, dw_bias_1, dw_m0, dw_shift,
-        pw_weight_1, pw_bias_1, pw_m0, pw_shift
+        image, dw_kernel_1, q8_arr(dw_bias_1), dw_m0, dw_shift,
+        pw_weight_1, q8_arr(pw_bias_1), pw_m0, pw_shift
     ).reshape(-1).tolist()
 
     # Second weight set (different)
@@ -184,8 +201,8 @@ async def test_ds_conv_integrated_weight_reload(dut):
     pw_bias_2 = np.random.randint(-2000, 2000, size=(C_OUT,), dtype=np.int32)
 
     golden_2 = ds_conv_layer_golden(
-        image, dw_kernel_2, dw_bias_2, dw_m0, dw_shift,
-        pw_weight_2, pw_bias_2, pw_m0, pw_shift
+        image, dw_kernel_2, q8_arr(dw_bias_2), dw_m0, dw_shift,
+        pw_weight_2, q8_arr(pw_bias_2), pw_m0, pw_shift
     ).reshape(-1).tolist()
 
     # ---- Helper: load weights ----
@@ -200,13 +217,14 @@ async def test_ds_conv_integrated_weight_reload(dut):
             dut.wl_addr.value = C_IN * 9 + ch
             dut.wl_data.value = int(dw_b[ch]) & 0xFF
             await RisingEdge(dut.clk)
+        pw_base = C_IN * 9 + C_IN
         for co in range(C_OUT):
             for ci in range(C_IN):
-                dut.wl_addr.value = co * C_IN + ci
+                dut.wl_addr.value = pw_base + co * C_IN + ci
                 dut.wl_data.value = int(pw_w[co, ci])
                 await RisingEdge(dut.clk)
         for co in range(C_OUT):
-            dut.wl_addr.value = C_OUT * C_IN + co
+            dut.wl_addr.value = pw_base + C_OUT * C_IN + co
             dut.wl_data.value = int(pw_b[co]) & 0xFF
             await RisingEdge(dut.clk)
         dut.wl_we.value = 0
@@ -228,12 +246,12 @@ async def test_ds_conv_integrated_weight_reload(dut):
 
         dut.in_valid.value = 0
 
-        timeout = (IMG_W * IMG_H * C_OUT) + 200
+        timeout = (IMG_W * IMG_H) * (C_IN * 4 + C_OUT) + 1000
         for _ in range(timeout):
             await RisingEdge(dut.clk)
             if dut.out_valid.value == 1:
                 outputs.append(read_signed(dut.pixel_out, 8))
-                if dut.out_last.value == 1:
+                if len(outputs) == NUM_PX * C_OUT:
                     break
         return outputs
 
@@ -278,6 +296,7 @@ async def test_ds_conv_integrated_back_to_back_frames(dut):
     IMG_H = int(dut.IMG_H.value)
     C_IN  = int(dut.C_IN.value)
     C_OUT = int(dut.C_OUT.value)
+    NUM_PX = IMG_W * IMG_H
 
     random.seed(0xDEAD)
     np.random.seed(0xDEAD)
@@ -294,8 +313,8 @@ async def test_ds_conv_integrated_back_to_back_frames(dut):
     pw_shift = 0
 
     golden = ds_conv_layer_golden(
-        image, dw_kernel, dw_bias, dw_m0, dw_shift,
-        pw_weight, pw_bias, pw_m0, pw_shift
+        image, dw_kernel, q8_arr(dw_bias), dw_m0, dw_shift,
+        pw_weight, q8_arr(pw_bias), pw_m0, pw_shift
     ).reshape(-1).tolist()
 
     # Load weights
@@ -309,13 +328,14 @@ async def test_ds_conv_integrated_back_to_back_frames(dut):
         dut.wl_addr.value = C_IN * 9 + ch
         dut.wl_data.value = int(dw_bias[ch]) & 0xFF
         await RisingEdge(dut.clk)
+    pw_base = C_IN * 9 + C_IN
     for co in range(C_OUT):
         for ci in range(C_IN):
-            dut.wl_addr.value = co * C_IN + ci
+            dut.wl_addr.value = pw_base + co * C_IN + ci
             dut.wl_data.value = int(pw_weight[co, ci])
             await RisingEdge(dut.clk)
     for co in range(C_OUT):
-        dut.wl_addr.value = C_OUT * C_IN + co
+        dut.wl_addr.value = pw_base + C_OUT * C_IN + co
         dut.wl_data.value = int(pw_bias[co]) & 0xFF
         await RisingEdge(dut.clk)
     dut.wl_we.value = 0
@@ -350,12 +370,12 @@ async def test_ds_conv_integrated_back_to_back_frames(dut):
 
         dut.in_valid.value = 0
 
-        timeout = (IMG_W * IMG_H * C_OUT) + 200
+        timeout = (IMG_W * IMG_H) * (C_IN * 4 + C_OUT) + 1000
         for _ in range(timeout):
             await RisingEdge(dut.clk)
             if dut.out_valid.value == 1:
                 outputs.append(read_signed(dut.pixel_out, 8))
-                if dut.out_last.value == 1:
+                if len(outputs) == NUM_PX * C_OUT:
                     break
         return outputs
 

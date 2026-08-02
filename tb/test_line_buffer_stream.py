@@ -18,8 +18,13 @@ def read_signed(sig, bits: int) -> int:
     return v - (1 << bits) if v & (1 << (bits - 1)) else v
 
 
-@cocotb.test()
-async def test_line_buffer_stream(dut):
+def read_win(dut):
+    return [read_signed(sig, 8) for sig in
+            (dut.win_0, dut.win_1, dut.win_2, dut.win_3, dut.win_4,
+             dut.win_5, dut.win_6, dut.win_7, dut.win_8)]
+
+
+async def run_stream_test(dut):
     """Stream an image through streaming line_buffer, compare all windows to golden."""
     cocotb.start_soon(Clock(dut.clk, 10, units="ns").start())
 
@@ -45,32 +50,24 @@ async def test_line_buffer_stream(dut):
     dut.rst_n.value = 1
     await RisingEdge(dut.clk)
 
-    # Stream input
-    dut.frame_start.value = 1
-    await RisingEdge(dut.clk)
-    dut.frame_start.value = 0
-
+    # Stream input, collecting windows as they stream out (the RTL emits one
+    # window per cycle once the first corner is captured, plus a tail after).
+    outputs = []
     for py in range(IMG_H):
         for px in range(IMG_W):
             dut.in_valid.value = 1
             dut.pixel_in.value = int(image[py, px])
             await RisingEdge(dut.clk)
+            if dut.out_valid.value == 1:
+                outputs.append(read_win(dut))
 
     dut.in_valid.value = 0
 
-    # Collect outputs (streaming produces IMG_W * IMG_H windows)
-    outputs = []
-    # Streaming: first output after ~2 rows + 1 col latency, then one per cycle
-    timeout = NUM_PX + IMG_W + IMG_H + 10
-    for _ in range(timeout):
+    # drain the tail windows emitted after the last input pixel
+    for _ in range(IMG_W + IMG_H + 10):
         await RisingEdge(dut.clk)
         if dut.out_valid.value == 1:
-            win = [
-                read_signed(dut.win_0, 8), read_signed(dut.win_1, 8), read_signed(dut.win_2, 8),
-                read_signed(dut.win_3, 8), read_signed(dut.win_4, 8), read_signed(dut.win_5, 8),
-                read_signed(dut.win_6, 8), read_signed(dut.win_7, 8), read_signed(dut.win_8, 8)
-            ]
-            outputs.append(win)
+            outputs.append(read_win(dut))
 
     # Verify count
     assert len(outputs) == NUM_PX, f"Window count mismatch: got {len(outputs)}, expected {NUM_PX}"
@@ -83,6 +80,11 @@ async def test_line_buffer_stream(dut):
 
 
 @cocotb.test()
+async def test_line_buffer_stream(dut):
+    await run_stream_test(dut)
+
+
+@cocotb.test()
 async def test_line_buffer_stream_8x8(dut):
     """Same test with 8x8 for exact match with original line_buffer test."""
-    await test_line_buffer_stream(dut)
+    await run_stream_test(dut)

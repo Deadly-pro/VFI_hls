@@ -13,7 +13,11 @@ module ds_conv_layer_integrated #(
     parameter DW_MEM_DEPTH = 512,
     parameter DW_MEM_AW    = 9,
     parameter PW_MEM_DEPTH = 512,
-    parameter PW_MEM_AW    = 9
+    parameter PW_MEM_AW    = 9,
+    // Base address of this layer on the shared weight-load bus. Multiple
+    // integrated layers (e.g. encoder_slice's E1/E2) share one wl bus, so
+    // each layer decodes a distinct window [WL_BASE, WL_BASE + size).
+    parameter WL_BASE = 0
 )(
     input                    clk,
     input                    rst_n,
@@ -26,7 +30,7 @@ module ds_conv_layer_integrated #(
 
     // Weight-load interface (shared for DW and PW memories)
     input                    wl_we,
-    input  [DW_MEM_AW-1:0]   wl_addr,
+    input  [15:0]            wl_addr,
     input  signed [7:0]      wl_data,
 
     // Requantization parameters (registers, not in weight_mem)
@@ -62,10 +66,11 @@ module ds_conv_layer_integrated #(
     );
 
     // ---- PW weight_mem ----
-    // Layout: [co*C_IN + ci] for co in 0..C_OUT-1, ci in 0..C_IN-1
-    // PW bias stored at offset C_OUT*C_IN .. C_OUT*C_IN + C_OUT - 1
-    localparam PW_KERNEL_OFFSET = 0;
-    localparam PW_BIAS_OFFSET   = C_OUT * C_IN;
+    // Layout: [base + co*C_IN + ci] for co in 0..C_OUT-1, ci in 0..C_IN-1
+    // PW bias stored at base + C_OUT*C_IN .. base + C_OUT*C_IN + C_OUT - 1
+    // base sits after the DW space so the two banks don't share addresses.
+    localparam PW_KERNEL_OFFSET = DW_WEIGHT_DEPTH;
+    localparam PW_BIAS_OFFSET   = PW_KERNEL_OFFSET + C_OUT * C_IN;
     localparam PW_WEIGHT_DEPTH  = PW_BIAS_OFFSET + C_OUT;
 
     wire signed [7:0] pw_mem_rdata;
@@ -118,14 +123,13 @@ module ds_conv_layer_integrated #(
 
     integer ki;
     always @(posedge clk) begin
-        if (wl_we && wl_addr >= DW_KERNEL_OFFSET && wl_addr < DW_KERNEL_OFFSET + C_IN * 9) begin
-            integer ch_idx = (wl_addr - DW_KERNEL_OFFSET) / 9;
-            integer tap_idx = (wl_addr - DW_KERNEL_OFFSET) % 9;
-            dw_kernels[ch_idx][tap_idx] <= wl_data;
+        // ponytail: direct index expr — block-scoped `integer x = expr` inits
+        // are unreliable under iverilog -g2012 (produced X weight regs).
+        if (wl_we && wl_addr >= WL_BASE + DW_KERNEL_OFFSET && wl_addr < WL_BASE + DW_KERNEL_OFFSET + C_IN * 9) begin
+            dw_kernels[(wl_addr - WL_BASE - DW_KERNEL_OFFSET) / 9][(wl_addr - WL_BASE - DW_KERNEL_OFFSET) % 9] <= wl_data;
         end
-        if (wl_we && wl_addr >= DW_BIAS_OFFSET && wl_addr < DW_WEIGHT_DEPTH) begin
-            integer ch_idx = wl_addr - DW_BIAS_OFFSET;
-            dw_biases[ch_idx] <= {{24{wl_data[7]}}, wl_data}; // sign-extend to 32-bit
+        if (wl_we && wl_addr >= WL_BASE + DW_BIAS_OFFSET && wl_addr < WL_BASE + DW_WEIGHT_DEPTH) begin
+            dw_biases[wl_addr - WL_BASE - DW_BIAS_OFFSET] <= {{24{wl_data[7]}}, wl_data}; // sign-extend to 32-bit
         end
     end
 
@@ -182,12 +186,14 @@ module ds_conv_layer_integrated #(
         end
     end
 
-    // DW phase complete detection
+    // DW phase complete detection. Channels capture/emit in ch_cnt order, so
+    // the LAST channel (C_IN-1) finishes last; waiting for it guarantees every
+    // channel has written all of dw_buf before the PW phase reads it.
     reg dw_done;
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n || frame_start)
             dw_done <= 1'b0;
-        else if (dw_out_valid[0] && dw_wr_pos[0] == NUM_PX - 1)
+        else if (dw_out_valid[C_IN-1] && dw_wr_pos[C_IN-1] == NUM_PX - 1)
             dw_done <= 1'b1;
     end
 
@@ -196,15 +202,11 @@ module ds_conv_layer_integrated #(
     reg signed [31:0] pw_biases [0:C_OUT-1];
 
     always @(posedge clk) begin
-        if (wl_we && wl_addr >= PW_KERNEL_OFFSET && wl_addr < PW_KERNEL_OFFSET + C_OUT * C_IN) begin
-            integer idx = wl_addr - PW_KERNEL_OFFSET;
-            integer co = idx / C_IN;
-            integer ci_idx = idx % C_IN;
-            pw_kernels[co][ci_idx] <= wl_data;
+        if (wl_we && wl_addr >= WL_BASE + PW_KERNEL_OFFSET && wl_addr < WL_BASE + PW_KERNEL_OFFSET + C_OUT * C_IN) begin
+            pw_kernels[(wl_addr - WL_BASE - PW_KERNEL_OFFSET) / C_IN][(wl_addr - WL_BASE - PW_KERNEL_OFFSET) % C_IN] <= wl_data;
         end
-        if (wl_we && wl_addr >= PW_BIAS_OFFSET && wl_addr < PW_WEIGHT_DEPTH) begin
-            integer co = wl_addr - PW_BIAS_OFFSET;
-            pw_biases[co] <= {{24{wl_data[7]}}, wl_data};
+        if (wl_we && wl_addr >= WL_BASE + PW_BIAS_OFFSET && wl_addr < WL_BASE + PW_WEIGHT_DEPTH) begin
+            pw_biases[wl_addr - WL_BASE - PW_BIAS_OFFSET] <= {{24{wl_data[7]}}, wl_data};
         end
     end
 

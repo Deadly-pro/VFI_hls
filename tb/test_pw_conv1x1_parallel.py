@@ -18,8 +18,7 @@ def read_signed(sig, bits: int) -> int:
     return v - (1 << bits) if v & (1 << (bits - 1)) else v
 
 
-@cocotb.test()
-async def test_pw_conv1x1_parallel(dut):
+async def run_pw_test(dut):
     """Test parallel PW against golden reference."""
     cocotb.start_soon(Clock(dut.clk, 10, units="ns").start())
 
@@ -64,7 +63,9 @@ async def test_pw_conv1x1_parallel(dut):
 
     await RisingEdge(dut.clk)
 
-    # Stream input: spatial position by position, channel-interleaved
+    # Stream input: one spatial position at a time, channel-interleaved.
+    # The FSM ignores in_valid while it computes, so each position must be
+    # fed and its C_OUT outputs drained before the next position starts.
     outputs = []
     for py in range(H):
         for px in range(W):
@@ -73,25 +74,29 @@ async def test_pw_conv1x1_parallel(dut):
                 dut.in_data.value = int(image[py, px, ci])
                 dut.in_last.value = 1 if ci == C_IN - 1 else 0
                 await RisingEdge(dut.clk)
-
-    dut.in_valid.value = 0
-    dut.in_last.value = 0
-
-    # Collect outputs
-    timeout = H * W * C_OUT + 50
-    for _ in range(timeout):
-        await RisingEdge(dut.clk)
-        if dut.out_valid.value == 1:
-            outputs.append(read_signed(dut.out_data, 8))
-            if dut.out_last.value == 1:
-                break
+            dut.in_valid.value = 0
+            dut.in_last.value = 0
+            # drain this position's outputs
+            for _ in range(C_IN + C_OUT + 20):
+                await RisingEdge(dut.clk)
+                if dut.out_valid.value == 1:
+                    outputs.append(read_signed(dut.out_data, 8))
+                    if dut.out_last.value == 1:
+                        break
+            else:
+                raise AssertionError(
+                    f"position ({px},{py}): out_last never asserted; got {outputs[-4:]}")
 
     assert outputs == golden_flat, f"Mismatch: got {outputs}, expected {golden_flat}"
     print(f"✓ test_pw_conv1x1_parallel passed: C_IN={C_IN}, C_OUT={C_OUT}, PARALLEL_CO={PARALLEL_CO}")
 
 
 @cocotb.test()
+async def test_pw_conv1x1_parallel(dut):
+    await run_pw_test(dut)
+
+
+@cocotb.test()
 async def test_pw_conv1x1_parallel_vs_serial(dut):
     """Verify parallel output matches serial pw_conv1x1 golden."""
-    # Same test as above - the golden is the serial reference
-    await test_pw_conv1x1_parallel(dut)
+    await run_pw_test(dut)

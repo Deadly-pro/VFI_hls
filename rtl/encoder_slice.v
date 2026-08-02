@@ -1,3 +1,4 @@
+`timescale 1ns/1ps
 // encoder_slice — Two-layer strided encoder (E1→E2) for Open-Frame-gen Nano.
 // Chains two ds_conv_layer_integrated instances with stride-2 downsampling.
 // Layer 1: IMG_W×IMG_H×C_IN  →  IMG_W/2×IMG_H/2×C_MID
@@ -25,7 +26,7 @@ module encoder_slice #(
 
     // Shared weight-load bus
     input                    wl_we,
-    input  [DW_MEM_AW-1:0]   wl_addr,
+    input  [15:0]            wl_addr,
     input  signed [7:0]      wl_data,
 
     // Requant params per layer
@@ -44,8 +45,14 @@ module encoder_slice #(
     wire signed [7:0] e1_pixel_out;
     wire e1_out_last;
 
-    // E1 weight-load uses same bus, separate address ranges
-    // E1 DW: [0 .. C_IN*9+C_IN-1], E1 PW: [0 .. C_MID*C_IN+C_MID-1]
+    // E1 weight-load uses same bus, distinct address window [0, E1_WEIGHT_SPACE)
+    localparam E1_DW_SPACE  = C_IN * 9 + C_IN;              // DW kernels + biases
+    localparam E1_PW_SPACE  = C_MID * C_IN + C_MID;         // PW kernels + biases
+    localparam E1_WEIGHT_SPACE = E1_DW_SPACE + E1_PW_SPACE;
+    // E2 loads at [E1_WEIGHT_SPACE, E1_WEIGHT_SPACE + E2_WEIGHT_SPACE)
+    localparam E2_DW_SPACE  = C_MID * 9 + C_MID;
+    localparam E2_PW_SPACE  = C_OUT * C_MID + C_OUT;
+    localparam E2_WEIGHT_SPACE = E2_DW_SPACE + E2_PW_SPACE;
 
     ds_conv_layer_integrated #(
         .IMG_W(IMG_W),
@@ -55,7 +62,8 @@ module encoder_slice #(
         .DW_MEM_DEPTH(DW_MEM_DEPTH),
         .DW_MEM_AW(DW_MEM_AW),
         .PW_MEM_DEPTH(PW_MEM_DEPTH),
-        .PW_MEM_AW(PW_MEM_AW)
+        .PW_MEM_AW(PW_MEM_AW),
+        .WL_BASE(0)
     ) u_e1 (
         .clk(clk),
         .rst_n(rst_n),
@@ -84,19 +92,12 @@ module encoder_slice #(
 
     reg [$clog2(E1_NUM_PX):0] e1_pos_cnt;  // counts E1 output positions
     reg [$clog2(C_MID)-1:0]   e1_ch_cnt;   // channel counter
-    reg                       e1_stride_pass;
 
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n || frame_start) begin
             e1_pos_cnt    <= 0;
             e1_ch_cnt     <= 0;
-            e1_stride_pass <= 1'b0;
         end else if (e1_out_valid) begin
-            // Check if this position passes stride-2 filter
-            integer row = e1_pos_cnt / IMG_W;
-            integer col = e1_pos_cnt % IMG_W;
-            e1_stride_pass <= (row % STRIDE == 0) && (col % STRIDE == 0);
-
             if (e1_ch_cnt == C_MID - 1) begin
                 e1_ch_cnt <= 0;
                 e1_pos_cnt <= e1_pos_cnt + 1;
@@ -107,13 +108,21 @@ module encoder_slice #(
     end
 
     // ---- Layer 2 (E2): stride-2 downsampling 4×4×C_MID → 2×2×C_OUT ----
-    // E2 takes filtered E1 outputs as input
-    wire e2_in_valid = e1_out_valid && e1_stride_pass;
+    // E2 takes filtered E1 outputs as input. Keep only even (row,col)
+    // positions of E1 — combinational on the current position (e1_pos_cnt
+    // is stable across the C_MID channel cycles of one position).
+    wire e1_pass_cur =
+        ((e1_pos_cnt / IMG_W) % STRIDE == 0) && ((e1_pos_cnt % IMG_W) % STRIDE == 0);
+    wire e2_in_valid = e1_out_valid && e1_pass_cur;
     wire e2_frame_start = frame_start;  // sync with original frame
 
     // E2 weight-load: separate address space (offset after E1 weights)
     // In practice, would use separate wl_addr ranges or separate bus
     // For now, share bus - user must load E1 then E2 weights sequentially
+
+    wire e2_out_valid;
+    wire signed [7:0] e2_pixel_out;
+    wire e2_out_last;
 
     ds_conv_layer_integrated #(
         .IMG_W(IMG_W/2),
@@ -123,16 +132,17 @@ module encoder_slice #(
         .DW_MEM_DEPTH(DW_MEM_DEPTH),
         .DW_MEM_AW(DW_MEM_AW),
         .PW_MEM_DEPTH(PW_MEM_DEPTH),
-        .PW_MEM_AW(PW_MEM_AW)
+        .PW_MEM_AW(PW_MEM_AW),
+        .WL_BASE(E1_WEIGHT_SPACE)
     ) u_e2 (
         .clk(clk),
         .rst_n(rst_n),
         .in_valid(e2_in_valid),
         .pixel_in(e1_pixel_out),
         .frame_start(e2_frame_start),
-        .out_valid(out_valid),
-        .pixel_out(pixel_out),
-        .out_last(out_last),
+        .out_valid(e2_out_valid),
+        .pixel_out(e2_pixel_out),
+        .out_last(e2_out_last),
         .wl_we(wl_we),
         .wl_addr(wl_addr),
         .wl_data(wl_data),
@@ -141,5 +151,51 @@ module encoder_slice #(
         .pw_m0(e2_pw_m0),
         .pw_shift(e2_pw_shift)
     );
+
+    // ---- Stride-2 filter on E2's output: keep even (row,col) positions ----
+    // E2 emits its full 4×4×C_OUT; downsample to 2×2×C_OUT.
+    localparam E2_OUT_W = IMG_W / 2;   // 4
+    localparam E2_OUT_H = IMG_H / 2;   // 4
+    reg [$clog2(E2_NUM_PX):0] e2_pos_cnt;
+    reg [$clog2(C_OUT)-1:0]   e2_ch_cnt;
+
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n || frame_start) begin
+            e2_pos_cnt <= 0;
+            e2_ch_cnt  <= 0;
+        end else if (e2_out_valid) begin
+            if (e2_ch_cnt == C_OUT - 1) begin
+                e2_ch_cnt <= 0;
+                e2_pos_cnt <= e2_pos_cnt + 1;
+            end else begin
+                e2_ch_cnt <= e2_ch_cnt + 1;
+            end
+        end
+    end
+
+    wire e2_pass =
+        ((e2_pos_cnt / E2_OUT_W) % STRIDE == 0) && ((e2_pos_cnt % E2_OUT_W) % STRIDE == 0);
+    wire e2_pass_last = e2_out_valid && e2_pass && (e2_ch_cnt == C_OUT - 1);
+
+    reg signed [7:0] pixel_out_r;
+    reg              out_valid_r;
+    reg              out_last_r;
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n || frame_start) begin
+            out_valid_r <= 1'b0;
+            pixel_out_r <= 8'sd0;
+            out_last_r  <= 1'b0;
+        end else begin
+            out_valid_r <= e2_out_valid && e2_pass;
+            if (e2_out_valid && e2_pass) begin
+                pixel_out_r <= e2_pixel_out;
+                out_last_r  <= (e2_pos_cnt == E2_NUM_PX - 1) && (e2_ch_cnt == C_OUT - 1);
+            end
+        end
+    end
+
+    assign out_valid = out_valid_r;
+    assign pixel_out = pixel_out_r;
+    assign out_last  = out_last_r;
 
 endmodule
