@@ -38,14 +38,13 @@ module line_buffer_stream #(
     reg                 done;
 
     // ---- capture: store each input pixel into its row's buffer ----
-    always @(posedge clk or negedge rst_n) begin
+    always @(posedge clk) begin
         if (!rst_n || frame_start) begin
             r     <= 0;
             c     <= 0;
             first <= 1'b0;
         end else if (in_valid) begin
             first <= 1'b1;
-            row_buf[r % 3][c] <= pixel_in;
             if (c == W - 1) begin
                 c <= 0;
                 if (r == H - 1) r <= 0; else r <= r + 1;
@@ -55,9 +54,17 @@ module line_buffer_stream #(
         end
     end
 
+    // row_buf needs no reset (only valid columns are ever read), so keep it in
+    // a clock-only block — an async-reset block would make Yosys's memory→
+    // registers pass emit "Multiple edge sensitive events".
+    always @(posedge clk) begin
+        if (in_valid)
+            row_buf[r % 3][c] <= pixel_in;
+    end
+
     // ---- output counter: start one cycle after the first full corner is
     // captured (input at (1,1)), then run row-major until all H*W windows ----
-    always @(posedge clk or negedge rst_n) begin
+    always @(posedge clk) begin
         if (!rst_n || frame_start) begin
             ov <= 0; oc <= 0; emit <= 1'b0; done <= 1'b0;
         end else begin
@@ -85,9 +92,11 @@ module line_buffer_stream #(
     wire signed [7:0] b1 = (ov == H-1)                 ? 8'sd0 : row_buf[(ov+1) % 3][oc];
     wire signed [7:0] b2 = (ov == H-1 || oc == W-1)    ? 8'sd0 : row_buf[(ov+1) % 3][oc+1];
 
-    // register the window (output counter moves on the same edge)
+    // register the window (output counter moves on the same edge).
+    // ponytail: synchronous reset — an async-reset block here made Yosys's
+    // PROC_DFF emit "Multiple edge sensitive events" on out_valid.
     reg signed [7:0] w0_r, w1_r, w2_r, w3_r, w4_r, w5_r, w6_r, w7_r, w8_r;
-    always @(posedge clk or negedge rst_n) begin
+    always @(posedge clk) begin
         if (!rst_n || frame_start) begin
             out_valid <= 1'b0;
             w0_r <= 0; w1_r <= 0; w2_r <= 0;
