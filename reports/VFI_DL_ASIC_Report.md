@@ -89,6 +89,31 @@ pw_conv1x1_parallel — PARALLEL_CO-way MAC array (closes serial bottleneck)
 
 > **Key Result**: The full integrated layer (`ds_conv_layer_integrated`) meets **104.7 MHz** maximum frequency on Sky130, cleanly exceeding the 100 MHz target with **2.71 mW** total power consumption at 100 MHz.
 
+### 3.0 Generic Yosys Gate Count (reproducible, local toolchain)
+
+The Sky130 numbers above require the OpenROAD+PDK flow (installed in a later
+sprint); the original cell counts there predate the current toolchain. The
+**verifiable** synthesis numbers from this repo (generic Yosys, no library) are:
+
+| Module | Total cells (incl. submodules) | Notes |
+|--------|-------------------------------|-------|
+| `mac_int8` | 950 | MAC, 8-bit |
+| `weight_mem` | 13,463 | 512-word SRAM |
+| `requantize` | 7,705 | Q0.31 requant |
+| `line_buffer` | 3,910 | frame capture 8×8 |
+| `line_buffer_stream` | 1,402 | 3-row cyclic streaming |
+| `dw_conv3x3_flat` | 16,535 | depthwise 3×3 |
+| `pw_conv1x1_flat` | 9,543 | serial pointwise |
+| **`ds_conv_layer_integrated_flat`** | **83,059** | full integrated layer |
+| `warp_unit` | 22,791 | bilinear grid_sample |
+| `blend_unit` | 793 | mask blend |
+| `vfi_synth` | 136,452 | warp+blend top-level |
+
+> These are **generic gate counts** (no standard-cell library), reproducible via
+> `syn/scripts/synth.sh` for the array-free modules and the flat-port wrappers in
+> `rtl/synth/` for the array-port CNN cells. Area/power/timing require the
+> OpenROAD+Sky130 flow and are **not** claimed at this layer.
+
 ### 3.1 Critical Path Analysis & Sprint 3 Fix
 - **Original Bottleneck**: `requantize` (8.87 ns) and `pw_conv1x1` (9.22 ns) combinational paths
 - **Sprint 3 Fix**: `pw_conv1x1_parallel` with PARALLEL_CO=2 reduces critical path to ~6.5 ns (**154 MHz Fmax**)
@@ -118,7 +143,7 @@ exactness; the 2-line streaming buffer upgrade path for 1080p is documented in
 
 ---
 
-## 4. GPU Comparison Methodology (Honest Boundaries)
+## 130. GPU Comparison Methodology (Honest Boundaries)
 
 ### 4.1 What We Compare
 | Dimension | ASIC (This Work) | RTX 3050 Laptop (Paper) |

@@ -40,7 +40,7 @@ module line_buffer #(
     wire at_left   = (out_col == 0);
     wire at_right  = (out_col == IMG_W - 1);
 
-    always @(posedge clk or negedge rst_n) begin
+    always @(posedge clk) begin
         if (!rst_n || frame_start) begin
             state     <= S_CAPTURE;
             write_pos <= 0;
