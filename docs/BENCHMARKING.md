@@ -9,7 +9,7 @@ deliberately not claimed. Every number is reproducible from this repo.
 |---|---|
 | Bit-exact RTL vs golden | cocotb suites (`tb/`), all 14 passing |
 | Gate count / logic area | synthesis reports (`syn/`) |
-| Interpolated-frame quality | `tools/vfi_demo.py` PSNR (54.7 dB, INT8 RTL vs FP16) |
+| Interpolated-frame quality | `tools/vfi_demo.py` on a Vimeo-90K test triplet: 50.8 dB INT8-RTL-vs-FP16; 26.4 dB vs ground truth |
 | Latency | cycle-accurate RTL (`valid/ready` contract) — fixed cycle count |
 | Memory footprint | parameter math (frame buffer, weight banks) |
 

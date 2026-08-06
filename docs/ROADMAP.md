@@ -19,7 +19,8 @@ datapath and locking in the new synthesis flow.
 - **Warp + blend**: `warp_unit` (bilinear grid_sample, Q8.8), `blend_unit`,
   and `vfi_synth` top-level, all verified bit-exact against `golden/`.
 - **Demo**: `tools/vfi_demo.py` turns two frames into an interpolated one
-  through the RTL INT8 path, PSNR 54.7 dB vs the FP16 ONNX reference.
+  through the RTL INT8 path, 50.8 dB vs the FP16 ONNX reference on a Vimeo-90K
+  test triplet (26.4 dB vs ground truth in both paths).
 - **Verification gate**: all 14 cocotb suites pass via `./run_all_tests.sh`.
 
 ## Synthesis

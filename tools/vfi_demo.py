@@ -152,7 +152,8 @@ def run_rtl_vfi_synth(t_i8, t1_i8, fx_q, fy_q, mask_q, IMG_W, IMG_H, NCH=3):
 
     subprocess.run(
         ["iverilog", "-g2012", "-o", out_vvp, "-s", "demo_rtl_tb",
-         f"-DIMG_W={IMG_W}", f"-DIMG_H={IMG_H}", f"-DNCH={NCH}",
+         f"-Pdemo_rtl_tb.IMG_W={IMG_W}", f"-Pdemo_rtl_tb.IMG_H={IMG_H}",
+         f"-Pdemo_rtl_tb.NCH={NCH}",
          tb_src] + rtl,
         check=True, capture_output=True)
     # run from ROOT so relative "weights/" paths resolve

@@ -57,8 +57,9 @@ Highlights:
 - `warp_unit` / `blend_unit` / `vfi_synth` — bit-exact vs `grid_sample_ref.py`
   and `vfi_synth_ref.py`.
 - End-to-end demo (`tools/vfi_demo.py --rtl`): two input frames → RTL warp+blend
-  → interpolated frame, bit-exact against the fixed-point golden, PSNR 54.7 dB
-  vs the FP16 ONNX reference.
+  → interpolated frame, bit-exact against the fixed-point golden, 50.8 dB vs the
+  FP16 ONNX reference on a Vimeo-90K test triplet (26.4 dB vs ground truth in
+  both paths — INT8 quantization is unmeasurable here).
 
 ## 3. Synthesis
 

@@ -31,12 +31,20 @@ Runs every cocotb suite in dependency order. Each suite drives the RTL and the n
 python3 tools/vfi_demo.py --t samples/frame_t.png --t1 samples/frame_t1.png --out out/mid.png --rtl
 ```
 
-Runs the INT8 RTL path and reports PSNR against the FP16 ONNX reference. On the
-bundled sample frames:
+Runs the INT8 RTL path and reports PSNR against the FP16 ONNX reference. On a
+Vimeo-90K test triplet (448x256):
 
-| Input frame t | Input frame t1 | Interpolated mid (RTL INT8, 54.7 dB vs FP16) |
+| Input frame t | Ground-truth middle (t+0.5) | Input frame t+1 |
 |---|---|---|
-| ![frame t](samples/frame_t.png) | ![frame t1](samples/frame_t1.png) | ![mid rtl](samples/mid_rtl.png) |
+| ![frame t](samples/frame_t.png) | ![frame gt](samples/frame_gt.png) | ![frame t1](samples/frame_t1.png) |
+
+Interpolated by the RTL warp+blend (INT8):
+
+![interpolated (RTL INT8)](samples/mid_rtl.png)
+
+On this sequence the INT8 output matches its FP16 reference at 50.8 dB, and
+the INT8 quantization delta against the ground truth is unmeasurable — both
+paths score 26.4 dB vs the ground-truth middle frame.
 
 ## Measured on hardware
 
@@ -44,13 +52,6 @@ Synthesized with **Vivado 2026.1** on an Artix-7 XC7A100T (100 MHz constraint).
 Utilization, worst negative slack and Fmax for every module:
 
 ![Vivado synthesis results](reports/plots/vivado_results.png)
-
-FPGA area per stage and the latency/energy plots from the benchmarking
-writeup (`reports/VFI_DL_Report.md`, `docs/BENCHMARKING.md`):
-
-![area breakdown](reports/plots/area_breakdown.png)
-![latency determinism](reports/plots/latency_determinism.png)
-![energy per frame](reports/plots/energy_per_frame.png)
 
 ## Numerics
 
