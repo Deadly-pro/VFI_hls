@@ -3,7 +3,7 @@
 set -e
 TOP="$1"
 EXTRA="${2:-}"
-RTL=/home/deadly-pro/VFI_hls/rtl
+RTL="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/rtl"
 LEAF=" "
 case $TOP in
   dw_conv3x3_flat) EXTRA="$RTL/synth/leaf_flat.v $RTL/line_buffer.v $RTL/requantize.v" ;;

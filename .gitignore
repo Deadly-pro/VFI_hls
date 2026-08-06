@@ -4,21 +4,24 @@ __pycache__/
 *.egg-info/
 .venv/
 venv/
-env310/
 .python-version
 .ipynb_checkpoints/
 
-# ---- hls4ml / Vitis HLS generated projects (large, regenerable) ----
-# Keep the *scripts* that generate these, ignore the generated trees.
-hls/*_prj/
-hls/**/myproject_prj/
-*.log
-*.jou
+# ---- Synthesis / simulation generated artifacts (regenerable) ----
+syn/output/
+syn/reports/
+syn/vivado/reports/
+syn/scripts/abc.history
+abc.history
+tb/sim_build/
+tb/results.xml
 vivado*.str
 .Xil/
-*_prj/
+*.log
+*.jou
 
-# ---- Model artifacts (regenerable; keep small final weights if you choose) ----
+# ---- Model artifacts (regenerable) ----
+weights/
 *.h5
 *.keras
 *.ckpt
@@ -29,18 +32,13 @@ data/*
 # ---- Reports: keep the extracted numbers + plots, ignore raw tool dumps ----
 reports/raw/
 
+# ---- Demo / working outputs ----
+samples/mid_*
+
+# ---- Private working context — never publish ----
+CONTEXT.md
+AGENTS.md
+
 # ---- OS / editor ----
 .DS_Store
 *.swp
-
-# Private working context — never publish
-CONTEXT.md
-
-# ---- VFI demo / synthesis generated artifacts (regenerable) ----
-weights/
-syn/output/
-syn/reports/
-tb/sim_build/
-tb/results.xml
-syn/scripts/abc.history
-samples/mid_*

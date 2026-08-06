@@ -1,46 +1,42 @@
-# VFI-DL — A Deep-Learning Inference Datapath in Verilog
+# VFI-DL
 
-A **weight-reloadable, fixed-architecture INT8 CNN inference datapath**, hand-written in
-Verilog RTL, verified bit-exact in simulation, and taken through the open-source
-**Yosys + OpenROAD** ASIC flow for real **area / power / fmax** — then benchmarked against
-a GPU on **energy-per-frame and latency determinism**.
+An INT8 CNN inference datapath for real-time video frame interpolation, written in Verilog.
 
-> The datapath implements the compute-dominant CNN backbone of my published VFI model
-> ("Open-Frame-gen / Nano"). No FPGA, no hls4ml — hand-written RTL, open silicon flow.
+This is the hardware for **Open-Frame-gen**, a frame interpolation model I published at JCSSE 2026. The repo builds the model's compute-heavy parts as a small, weight-reloadable fixed-function engine: a depthwise-separable encoder that runs the CNN backbone, plus a warp+blend stage (bilinear grid_sample and mask blend) that turns two input frames into an interpolated one. Everything is hand-written RTL, verified cycle-by-cycle against numpy references, and synthesized on an Artix-7 XC7A100T with Vivado 2026.1.
 
-This is the fixed-function-hardware leg of a frame-generation stack I built end-to-end:
-- **Algorithm** — "Open-Frame-gen" (JCSSE 2026).
-- **SIMT GPU** in RTL to run it — the Omni-RISC APU (separate repo).
-- **Fixed-function DL inference datapath** in RTL — *this repo*.
+## Layout
 
-## Scope (locked — see `docs/ARCHITECTURE.md`)
-- **Accelerate the CNN backbone**, not full temporal VFI. The `grid_sample` warp is a
-  data-dependent gather and stays out of the RTL.
-- **INT8 fixed-point**, symmetric per-tensor. Float is out.
-- **Deliverable = verified RTL + OpenROAD area/power/fmax + one GPU-comparison plot + a
-  1–2 page writeup.** Every number is backed by a passing bit-exact test.
+```
+rtl/       Verilog RTL
+golden/    numpy references — define the exact INT8 numerics the RTL must match
+tb/        cocotb testbenches (one per module)
+syn/       synthesis flow (Vivado 2026.1; historical Yosys/Sky130 scripts kept)
+tools/     vfi_demo.py — two frames in, interpolated frame out
+samples/   demo frames
+reports/   writeup with measured numbers
+docs/      architecture notes, roadmap, benchmarking methodology
+```
 
-## Toolchain (all open, runs on Fedora)
-| Stage | Tool |
-|-------|------|
-| Golden model | numpy (`golden/`) |
-| RTL | hand-written Verilog (`rtl/`) |
-| Verification | cocotb + Verilator/Icarus (`tb/`) |
-| Synthesis + P&R | Yosys + OpenROAD-flow-scripts (`syn/`) |
-| GPU comparison | Python + matplotlib (`benchmarks/`) |
+## Running the tests
 
-## Repo layout
-| Path | Purpose |
-|------|---------|
-| `rtl/`        | Verilog RTL for the datapath |
-| `golden/`     | numpy bit-exact reference models |
-| `tb/`         | cocotb testbenches |
-| `syn/`        | Yosys/OpenROAD flow config + scripts |
-| `benchmarks/` | GPU energy/latency comparison + plot |
-| `reports/`    | Extracted area/power/fmax numbers, plots, writeup |
-| `docs/`       | `ARCHITECTURE.md` (locked def), `ROADMAP.md`, `PRIOR_ART.md` |
-| `CONTEXT.md`  | Project handoff / working contract |
+```
+./run_all_tests.sh
+```
+
+Runs every cocotb suite in dependency order. Each suite drives the RTL and the numpy golden model in lockstep and compares outputs every cycle — any mismatch fails the run with the exact cycle and values.
+
+## Demo
+
+```
+python3 tools/vfi_demo.py --t samples/frame_t.png --t1 samples/frame_t1.png --out out/mid.png --rtl
+```
+
+Runs the INT8 RTL path and reports PSNR against the FP16 ONNX reference.
+
+## Numerics
+
+INT8 activations and weights (symmetric, per-tensor), INT32 accumulation, TFLite-style requantization with round-half-up and clamp to `[-128, 127]`. The numpy golden in `golden/` is the authoritative definition of the rounding; the RTL matches it bit-for-bit.
 
 ## Status
-See `docs/ROADMAP.md`. Minimum defensible artifact = end of Sprint 2 (a verified,
-synthesized, weight-reloadable depthwise-separable INT8 layer).
+
+The encoder and warp+blend datapaths are both verified (all suites pass). Synthesis and measured numbers are tracked in `docs/ROADMAP.md`; the technical writeup is `reports/VFI_DL_Report.md`.

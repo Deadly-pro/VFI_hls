@@ -153,9 +153,10 @@ def quantize_to_int8(arr: np.ndarray, scale: float = None) -> tuple[np.ndarray, 
 
 
 def main():
+    here = os.path.dirname(os.path.abspath(__file__))
     parser = argparse.ArgumentParser()
-    parser.add_argument('--onnx', default='/home/deadly-pro/VFI_hls/nano_v16.onnx')
-    parser.add_argument('--output-dir', default='/home/deadly-pro/VFI_hls/weights')
+    parser.add_argument('--onnx', default=os.path.join(here, 'nano_v16.onnx'))
+    parser.add_argument('--output-dir', default=os.path.join(here, 'weights'))
     args = parser.parse_args()
 
     os.makedirs(args.output_dir, exist_ok=True)

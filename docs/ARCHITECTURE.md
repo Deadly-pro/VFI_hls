@@ -1,79 +1,73 @@
-# Architecture — VFI-DL Accelerator in Verilog (LOCKED PROJECT DEFINITION)
+# Architecture
 
-## One-sentence definition
-A **weight-reloadable, fixed-architecture INT8 deep-learning inference datapath**,
-hand-written in Verilog RTL, functionally verified bit-exact against a Python golden
-model in simulation, and pushed through the open-source **Yosys + OpenROAD** ASIC flow
-for real **area / power / fmax** — benchmarked against a GPU running the same workload
-on **energy-per-frame and latency determinism** (not raw watts). No FPGA. No hls4ml.
+What this repo builds, and the constraints it builds under.
 
-The datapath implements the compute-dominant **CNN backbone** of the "Open-Frame-gen /
-Nano" VFI model (depthwise-separable encoder-decoder). The `grid_sample` warp is **out
-of scope** (data-dependent gather — belongs in software / a separate late unit).
+## One-line description
 
-## The five locked conditions
-1. **Scope-from-a-core:** first artifact is ONE verified depthwise-separable conv layer,
-   not the whole net. Scale only after it is verified + synthesized.
-2. **Bit-exact verification before any number is trusted.** Every RTL block matches a
-   numpy golden model exactly; failures reported with the real mismatch, reruns mandatory.
-3. **INT8 fixed-point** numeric format (per-tensor symmetric to start). Float is out.
-4. **GPU comparison framed on energy/op + latency determinism, with process node stated.**
-   No silent 130 nm-PDK-vs-8 nm-GPU raw-watt comparison.
-5. **Warp stays out of the RTL.** We accelerate the CNN backbone (the FLOPs).
+A weight-reloadable, fixed-architecture INT8 CNN inference datapath in
+hand-written Verilog, verified bit-exact against numpy golden models and
+synthesized with Vivado 2026.1 on an Artix-7 XC7A100T.
 
-## Numeric format
-- Weights & activations: **INT8, symmetric per-tensor** (scale `S`, zero-point 0).
-- Accumulator: **INT32**.
-- Requantize between layers: `acc32 → round(acc32 * M0 * 2^-n) → clamp[-128,127] → int8`,
-  TFLite-style fixed-point multiplier `(M0, n)`. The **numpy golden model defines the exact
-  rounding** so RTL must match bit-for-bit.
+The datapath implements the compute-heavy parts of the "Open-Frame-gen / Nano"
+frame interpolation model (JCSSE 2026): a depthwise-separable CNN encoder plus
+a warp+blend stage (bilinear grid_sample, mask blend) that produces an
+interpolated frame from two inputs.
 
-## Module hierarchy (build + verify bottom-up, in THIS order)
-| # | Module | What it does | Interfaces |
-|---|--------|--------------|------------|
-| 1 | `mac_int8`     | INT8×INT8→INT32 multiply-accumulate (the atom) | data in, acc out |
-| 2 | `weight_mem`   | on-chip weight store **with a load port** (the reloadable core) | `wl_addr/wl_data/wl_we` write; read port |
-| 3 | `line_buffer`  | holds N rows, emits sliding 3×3 windows | pixel stream in, window out |
-| 4 | `requantize`   | INT32 acc → INT8 (M0, shift, clamp) | acc in, int8 out |
-| 5 | `dw_conv3x3`   | depthwise 3×3 (per-channel) = line_buffer + 9 MACs + acc + requant | stream in/out |
-| 6 | `pw_conv1x1`   | pointwise 1×1 (channel mixing) = MAC array over channels | stream in/out |
-| 7 | `ds_conv_layer`| depthwise-separable layer = dw → pw → requant + weight_mem. **First full artifact.** | stream in/out + weight-load + cfg |
+## Scope decisions
 
-Streaming uses simple `valid`/`ready` handshake (AXI-Stream-lite); weight load is a plain
-`addr/data/we` port (wrap as AXI-Lite later). Config: `start`, layer dims.
+- **Accelerate the CNN backbone and the warp+blend, not the whole model.**
+  Flow prediction stays in software. The warp is a data-dependent gather and is
+  implemented as its own RTL unit (`warp_unit`), not fused into the CNN path.
+- **INT8 fixed point only.** Activations and weights are signed INT8, symmetric
+  per tensor (scale S, zero point 0). Accumulation is INT32. Requantization
+  between layers is `round(acc * M0 * 2^-n)` clamped to `[-128, 127]`
+  (TFLite-style). Float datapaths are out of scope.
+- **Fixed architecture.** The datapath is not reconfigurable; the weight store
+  is. This is a CNN accelerator, not an NPU.
 
-## Repository components
-- `rtl/` — the Verilog datapath: microarchitecture, dataflow (weight-stationary vs
-  output-stationary), and quantization design.
-- `golden/` — numpy bit-exact reference model per module.
-- `tb/` — cocotb testbench per module, with test-vector generation.
-- `syn/` — Yosys/OpenROAD flow config + scripts.
-- `benchmarks/` — GPU-comparison harness + plot.
+## Module hierarchy (build and verify bottom-up, in this order)
 
-Every module is verified against its golden model before any synthesis number is trusted.
+| Module | What it does |
+|---|---|
+| `mac_int8` | INT8 x INT8 -> INT32 multiply-accumulate (the atom) |
+| `weight_mem` | on-chip weight store with a load port (`wl_addr/wl_data/wl_we`) |
+| `line_buffer` | holds N rows, emits sliding 3x3 windows |
+| `requantize` | INT32 -> INT8 (M0, shift, clamp) |
+| `dw_conv3x3` | depthwise 3x3 conv = line buffer + 9 MACs + accumulator + requant |
+| `pw_conv1x1` | pointwise 1x1 conv (channel mixing), serial MAC array |
+| `ds_conv_layer` | depthwise-separable layer: dw -> pw -> requant, with weight store |
+| `ds_conv_layer_integrated` | the layer with `weight_mem` wired in for runtime reload |
+| `encoder_slice` | two-layer strided encoder (E1 -> E2), stride-2 downsampling |
+| `line_buffer_stream` | streaming 3x3 window extractor (1 pixel in / 1 window out) |
+| `pw_conv1x1_parallel` | parallel MAC array (PARALLEL_CO=2/4) |
+| `warp_unit` | bilinear grid_sample (align_corners=1, border clamp), Q8.8 |
+| `blend_unit` | mask blend `(m*a + (255-m)*b + 127) >> 8` |
+| `vfi_synth` | top-level: 2x warp + blend per channel, serialized output |
 
-## Verification approach
-- Golden model: numpy, quantized, bit-exact reference (`golden/`).
-- Testbench: **cocotb** driving the DUT via Verilator/Icarus, comparing to golden vectors
-  in the same Python process. Bit-mismatch = fail, printed with indices + values.
+Streaming between stages is a simple `valid/ready` handshake. Weight loading is
+a plain `addr/data/write-enable` port.
 
-## Synthesis / silicon numbers
-- **Yosys** synth → **OpenROAD** (OpenROAD-flow-scripts) place-and-route on an open PDK
-  (start Sky130; consider ASAP7 7 nm for a fairer GPU node comparison).
-- Extract: cell area (µm²), power (mW, OpenSTA), fmax (MHz). Per module + full layer.
+## Verification
 
-## GPU comparison methodology (honest framing)
-- Baseline: Nano GPU numbers from the paper (RTX 3050, Samsung 8 nm).
-- Compare on **energy-per-frame / energy-per-MAC (architectural)** and **latency
-  determinism** — where fixed-function beats a general-purpose GPU independent of node
-  (no instruction fetch / warp scheduler / cache tax). Any absolute-watt claim states the
-  process-node gap explicitly.
+Every module has a numpy golden reference in `golden/` and a cocotb suite in
+`tb/`. The golden model is the authority on the exact arithmetic (including the
+requant rounding); the testbench compares RTL output against it every cycle and
+fails on the first mismatch with the cycle and values. `./run_all_tests.sh`
+runs all 14 suites in dependency order.
 
-## Explicitly out of scope
-- `grid_sample` warp+blend.  - Float datapaths.  - Full 1080p in one pass (tile/scale).
-- Reconfigurable *architecture* (that's an NPU — the "where this goes next" answer).
+## Synthesis
 
-## The cross-project narrative
-"I design DL compute across the whole stack as RTL I wrote myself — the algorithm
-(published paper), a SIMT GPU (the APU, separate), and this fixed-function DL inference
-datapath — the hardware taken through an open silicon flow to real area/power/fmax."
+Vivado 2026.1 batch flow in `syn/vivado/` (Artix-7 XC7A100T, 100 MHz target).
+The earlier Yosys/Sky130 flow is kept in `syn/scripts/` for reference. See
+`docs/ROADMAP.md` for the current numbers.
+
+## Repo layout
+
+- `rtl/` — the Verilog; `rtl/synth/` holds flat-port wrappers for cells that
+  use unpacked array ports (needed by tools that reject them).
+- `golden/` — numpy bit-exact references, one per module.
+- `tb/` — cocotb testbenches, one per module.
+- `syn/` — synthesis scripts and constraints.
+- `tools/` — `vfi_demo.py`, the end-to-end demo.
+- `reports/` — the technical writeup (`VFI_DL_Report.md`).
+- `docs/` — this file, the roadmap, and the benchmarking methodology.

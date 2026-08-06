@@ -13,6 +13,10 @@ import numpy as np
 import matplotlib
 matplotlib.use('Agg')  # Non-interactive backend
 import matplotlib.pyplot as plt
+import os
+
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+PLOT_DIR = os.path.join(SCRIPT_DIR, "reports", "plots")
 
 # ---- ASIC Measured Data (Sky130 @ 100 MHz) ----
 ASIC_FREQ_MHZ = 104.7  # Measured Fmax
@@ -93,7 +97,7 @@ def generate_latency_determinism_plot():
     ax2.grid(True, alpha=0.3, axis='y')
 
     plt.tight_layout()
-    plt.savefig('/home/deadly-pro/VFI_hls/reports/plots/latency_determinism.png', dpi=150, bbox_inches='tight')
+    plt.savefig(os.path.join(PLOT_DIR, 'latency_determinism.png'), dpi=150, bbox_inches='tight')
     plt.close()
     print("Saved latency_determinism.png")
 
@@ -133,7 +137,7 @@ def generate_energy_per_frame_plot():
                     xytext=(0, 3), textcoords='offset points', ha='center', va='bottom', fontsize=8)
 
     plt.tight_layout()
-    plt.savefig('/home/deadly-pro/VFI_hls/reports/plots/energy_per_frame.png', dpi=150, bbox_inches='tight')
+    plt.savefig(os.path.join(PLOT_DIR, 'energy_per_frame.png'), dpi=150, bbox_inches='tight')
     plt.close()
     print("Saved energy_per_frame.png")
 
@@ -160,13 +164,13 @@ def generate_area_breakdown_plot():
                     xytext=(5, 0), textcoords='offset points', ha='left', va='center', fontsize=9)
 
     plt.tight_layout()
-    plt.savefig('/home/deadly-pro/VFI_hls/reports/plots/area_breakdown.png', dpi=150, bbox_inches='tight')
+    plt.savefig(os.path.join(PLOT_DIR, 'area_breakdown.png'), dpi=150, bbox_inches='tight')
     plt.close()
     print("Saved area_breakdown.png")
 
 
 if __name__ == '__main__':
-    os.makedirs('/home/deadly-pro/VFI_hls/reports/plots', exist_ok=True)
+    os.makedirs(PLOT_DIR, exist_ok=True)
     generate_latency_determinism_plot()
     generate_energy_per_frame_plot()
     generate_area_breakdown_plot()
