@@ -62,8 +62,42 @@ Highlights:
 
 ## 3. Synthesis
 
-The current flow is **Vivado 2026.1** on an Artix-7 XC7A100T (`syn/vivado/`).
-Results are tracked in `docs/ROADMAP.md`.
+The current flow is **Vivado 2026.1** on an Artix-7 XC7A100T (`syn/vivado/`),
+100 MHz constraint. Post-synthesis results (utilization/WNS/Fmax, table image
+in `reports/plots/vivado_results.png`):
+
+| Module | LUT | LUTmem | FF | DSP | BRAM tiles | WNS (ns) | Fmax (MHz) |
+|---|---|---|---|---|---|---|---|
+| mac_int8 | 94 | 0 | 32 | 0 | - | 7.12 | 347.6 |
+| weight_mem | 0 | 0 | 0 | 0 | 0.5 | - (no paths) | - |
+| requantize | 323 | 0 | 34 | 4 | - | -0.50 | 95.2 |
+| line_buffer | 200 | 108 | 21 | 0 | - | 6.67 | 300.3 |
+| line_buffer_stream | 394 | 0 | 282 | 0 | - | 6.20 | 262.8 |
+| dw_conv3x3 | 1,309 | 108 | 93 | 4 | - | -3.74 | 72.8 |
+| pw_conv1x1 | 545 | 0 | 82 | 4 | - | -6.80 | 59.5 |
+| pw_conv1x1_parallel | 965 | 0 | 115 | 8 | - | -7.98 | 55.6 |
+| ds_conv_layer | 8,818 | 432 | 2,598 | 20 | - | -6.80 | 59.5 |
+| ds_conv_layer_integrated | 8,690 | 432 | 3,062 | 20 | - | -6.80 | 59.5 |
+| warp_unit | 1,985 | 0 | 2,074 | 4 | - | -19.64 | 33.7 |
+| blend_unit | 173 | 0 | 9 | 0 | - | - (no reg-reg paths) | >100 |
+| vfi_synth | 12,371 | 0 | 12,478 | 24 | - | -19.64 | 33.7 |
+
+`vfi_synth` place+route: **12,287 LUT / 12,478 FF / 24 DSP, 0.318 W total
+(0.226 W dynamic)** at the 100 MHz constraint; post-route WNS -21.8 ns →
+Fmax ≈ 31.4 MHz. Notes:
+
+- Primitives close comfortably (mac_int8 at 347 MHz; line buffers 260–300 MHz).
+- `requantize` (the 64-bit scale multiply) sets the per-layer pace at 95 MHz.
+- CNN layers land at 55–73 MHz; the MAC-array critical path is the shared
+  serial-accumulator chain.
+- `warp_unit`/`vfi_synth` are frame-buffer-gather bound (~31–34 MHz); the four
+  parallel reads feed the bilinear taps combinationally.
+- `encoder_slice` (serial C_OUT=96 PW) does not finish Vivado synthesis — the
+  serial-PW FSM blows up logic optimization; `pw_conv1x1_parallel` is the fix
+  and the parallel-PW layer itself synthesizes.
+- `weight_mem` maps to 0.5 BRAM tile (RAMB18) with no sequential logic;
+  `blend_unit` is a 1-cycle mask blend with only output staging registers, so
+  neither has a reportable setup path.
 
 The earlier **Yosys/Sky130** flow (`syn/scripts/`) measured these numbers on the
 8 core modules (100 MHz target, 1.8 V):

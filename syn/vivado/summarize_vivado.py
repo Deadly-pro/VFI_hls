@@ -50,7 +50,8 @@ def parse_wns(log_path):
 
 
 def main():
-    util_files = sorted(glob.glob(os.path.join(RPT_DIR, "*_util.rpt")))
+    util_files = sorted(f for f in glob.glob(os.path.join(RPT_DIR, "*_util.rpt"))
+                        if "_postroute" not in os.path.basename(f))
     if not util_files:
         print(f"No utilization reports in {RPT_DIR}")
         sys.exit(1)

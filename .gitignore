@@ -16,6 +16,7 @@ abc.history
 tb/sim_build/
 tb/results.xml
 vivado*.str
+clockInfo.txt
 .Xil/
 *.log
 *.jou
