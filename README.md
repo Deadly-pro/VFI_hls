@@ -2,7 +2,7 @@
 
 An INT8 CNN inference datapath for real-time video frame interpolation, written in Verilog.
 
-This is the hardware for **Open-Frame-gen**, a frame interpolation model I published at JCSSE 2026. The repo builds the model's compute-heavy parts as a small, weight-reloadable fixed-function engine: a depthwise-separable encoder that runs the CNN backbone, plus a warp+blend stage (bilinear grid_sample and mask blend) that turns two input frames into an interpolated one. Everything is hand-written RTL, verified cycle-by-cycle against numpy references, and synthesized on an Artix-7 XC7A100T with Vivado 2026.1.
+This is the hardware for **[Open-Frame-gen](https://github.com/Deadly-pro/Open-Frame-gen)**, a frame interpolation model I published at JCSSE 2026. The repo builds the model's compute-heavy parts as a small, weight-reloadable fixed-function engine: a depthwise-separable encoder that runs the CNN backbone, plus a warp+blend stage (bilinear grid_sample and mask blend) that turns two input frames into an interpolated one. Everything is hand-written RTL, verified cycle-by-cycle against numpy references, and synthesized on an Artix-7 XC7A100T with Vivado 2026.1.
 
 ## Layout
 
