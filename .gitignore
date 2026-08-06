@@ -35,6 +35,7 @@ reports/raw/
 
 # ---- Demo / working outputs ----
 samples/mid_*
+!samples/mid_rtl.png
 
 # ---- Private working context — never publish ----
 CONTEXT.md
