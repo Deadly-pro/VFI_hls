@@ -4,6 +4,8 @@ An INT8 CNN inference datapath for real-time video frame interpolation, written 
 
 This is the hardware for **[Open-Frame-gen](https://github.com/Deadly-pro/Open-Frame-gen)**, a frame interpolation model I published at JCSSE 2026. The repo builds the model's compute-heavy parts as a small, weight-reloadable fixed-function engine: a depthwise-separable encoder that runs the CNN backbone, plus a warp+blend stage (bilinear grid_sample and mask blend) that turns two input frames into an interpolated one. Everything is hand-written RTL, verified cycle-by-cycle against numpy references, and synthesized on an Artix-7 XC7A100T with Vivado 2026.1.
 
+**Why this exists.** Frame interpolation is the engine behind DLSS 3 / FSR 3 Frame Generation — but on a GPU it runs on tensor cores at full-datacenter-style cost. This repo shows the compute-heavy parts of that same workload (the CNN backbone + warp/blend) as a small, weight-reloadable INT8 fixed-function engine that runs deterministically on an FPGA. It demonstrates the architecture for adding temporal interpolation to constrained hardware; it is not a shipping GPU feature.
+
 ## Layout
 
 ```
