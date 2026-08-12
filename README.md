@@ -1,4 +1,4 @@
-# VFI-DL
+# VFI-HLS
 
 An INT8 CNN inference datapath for real-time video frame interpolation, written in Verilog.
 
