@@ -17,7 +17,12 @@ module ds_conv_layer_integrated #(
     // Base address of this layer on the shared weight-load bus. Multiple
     // integrated layers (e.g. encoder_slice's E1/E2) share one wl bus, so
     // each layer decodes a distinct window [WL_BASE, WL_BASE + size).
-    parameter WL_BASE = 0
+    parameter WL_BASE = 0,
+    // Parallelism of the pointwise stage. >1 selects pw_conv1x1_parallel
+    // (PARALLEL_CO MACs), 1 keeps the serial pw_conv1x1. The parallel MAC
+    // array is what makes wide layers (e.g. C_OUT=96) synthesize — the
+    // serial C_OUT*C_IN FSM blows up Vivado's logic optimization.
+    parameter PW_PARALLEL_CO = 1
 )(
     input                    clk,
     input                    rst_n,
@@ -241,23 +246,46 @@ module ds_conv_layer_integrated #(
         end
     endgenerate
 
-    pw_conv1x1 #(
-        .C_IN(C_IN),
-        .C_OUT(C_OUT)
-    ) u_pw (
-        .clk(clk),
-        .rst_n(rst_n),
-        .in_valid(pw_in_valid),
-        .in_data(pw_in_data),
-        .in_last(pw_in_last),
-        .out_valid(pw_out_valid),
-        .out_data(pw_out_data),
-        .out_last(pw_out_last),
-        .weight(pw_weight_flat),
-        .bias(pw_bias_flat),
-        .rq_m0(pw_m0),
-        .rq_shift(pw_shift)
-    );
+    generate
+        if (PW_PARALLEL_CO > 1) begin : pw_parallel_inst
+            pw_conv1x1_parallel #(
+                .C_IN(C_IN),
+                .C_OUT(C_OUT),
+                .PARALLEL_CO(PW_PARALLEL_CO)
+            ) u_pw (
+                .clk(clk),
+                .rst_n(rst_n),
+                .in_valid(pw_in_valid),
+                .in_data(pw_in_data),
+                .in_last(pw_in_last),
+                .out_valid(pw_out_valid),
+                .out_data(pw_out_data),
+                .out_last(pw_out_last),
+                .weight(pw_weight_flat),
+                .bias(pw_bias_flat),
+                .rq_m0(pw_m0),
+                .rq_shift(pw_shift)
+            );
+        end else begin : pw_serial_inst
+            pw_conv1x1 #(
+                .C_IN(C_IN),
+                .C_OUT(C_OUT)
+            ) u_pw (
+                .clk(clk),
+                .rst_n(rst_n),
+                .in_valid(pw_in_valid),
+                .in_data(pw_in_data),
+                .in_last(pw_in_last),
+                .out_valid(pw_out_valid),
+                .out_data(pw_out_data),
+                .out_last(pw_out_last),
+                .weight(pw_weight_flat),
+                .bias(pw_bias_flat),
+                .rq_m0(pw_m0),
+                .rq_shift(pw_shift)
+            );
+        end
+    endgenerate
 
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n || frame_start) begin

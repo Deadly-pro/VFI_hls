@@ -13,7 +13,12 @@ module encoder_slice #(
     parameter DW_MEM_DEPTH = 1024,
     parameter DW_MEM_AW    = 10,
     parameter PW_MEM_DEPTH = 2048,
-    parameter PW_MEM_AW    = 11
+    parameter PW_MEM_AW    = 11,
+    // Pointwise parallelism per layer. The serial C_OUT*C_IN PW FSM blows up
+    // Vivado logic optimization at C_MID/C_OUT scale (E2 = 96x48), so both
+    // layers route the PW stage through pw_conv1x1_parallel.
+    parameter E1_PW_PARALLEL_CO = 2,
+    parameter E2_PW_PARALLEL_CO = 4
 )(
     input                    clk,
     input                    rst_n,
@@ -63,7 +68,8 @@ module encoder_slice #(
         .DW_MEM_AW(DW_MEM_AW),
         .PW_MEM_DEPTH(PW_MEM_DEPTH),
         .PW_MEM_AW(PW_MEM_AW),
-        .WL_BASE(0)
+        .WL_BASE(0),
+        .PW_PARALLEL_CO(E1_PW_PARALLEL_CO)
     ) u_e1 (
         .clk(clk),
         .rst_n(rst_n),
@@ -133,7 +139,8 @@ module encoder_slice #(
         .DW_MEM_AW(DW_MEM_AW),
         .PW_MEM_DEPTH(PW_MEM_DEPTH),
         .PW_MEM_AW(PW_MEM_AW),
-        .WL_BASE(E1_WEIGHT_SPACE)
+        .WL_BASE(E1_WEIGHT_SPACE),
+        .PW_PARALLEL_CO(E2_PW_PARALLEL_CO)
     ) u_e2 (
         .clk(clk),
         .rst_n(rst_n),

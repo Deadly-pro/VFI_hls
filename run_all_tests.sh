@@ -44,7 +44,7 @@ run_test test_ds_conv_layer ds_conv_layer "../rtl/ds_conv_layer.v ../rtl/dw_conv
 run_test test_ds_conv_layer_integrated ds_conv_layer_integrated "../rtl/ds_conv_layer_integrated.v ../rtl/dw_conv3x3.v ../rtl/line_buffer.v ../rtl/requantize.v ../rtl/pw_conv1x1.v ../rtl/weight_mem.v"
 run_test test_line_buffer_stream line_buffer_stream "../rtl/line_buffer_stream.v"
 run_test test_pw_conv1x1_parallel pw_conv1x1_parallel "../rtl/pw_conv1x1_parallel.v"
-run_test test_encoder_slice    encoder_slice    "../rtl/encoder_slice.v ../rtl/ds_conv_layer_integrated.v ../rtl/dw_conv3x3.v ../rtl/line_buffer.v ../rtl/requantize.v ../rtl/pw_conv1x1.v ../rtl/weight_mem.v"
+run_test test_encoder_slice    encoder_slice    "../rtl/encoder_slice.v ../rtl/ds_conv_layer_integrated.v ../rtl/dw_conv3x3.v ../rtl/line_buffer.v ../rtl/requantize.v ../rtl/pw_conv1x1.v ../rtl/pw_conv1x1_parallel.v ../rtl/weight_mem.v"
 run_test test_warp_unit      warp_unit       "../rtl/warp_unit.v"
 run_test test_blend_unit     blend_unit      "../rtl/blend_unit.v"
 run_test test_vfi_synth      vfi_synth       "../rtl/vfi_synth.v ../rtl/warp_unit.v ../rtl/blend_unit.v"

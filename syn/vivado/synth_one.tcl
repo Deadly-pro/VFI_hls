@@ -31,7 +31,7 @@ set src_map(ds_conv_layer_integrated)  [list $rtl_dir/ds_conv_layer_integrated.v
 set src_map(encoder_slice)             [list $rtl_dir/encoder_slice.v $rtl_dir/ds_conv_layer_integrated.v \
                                               $rtl_dir/dw_conv3x3.v $rtl_dir/line_buffer.v \
                                               $rtl_dir/requantize.v $rtl_dir/pw_conv1x1.v \
-                                              $rtl_dir/weight_mem.v]
+                                              $rtl_dir/pw_conv1x1_parallel.v $rtl_dir/weight_mem.v]
 set src_map(warp_unit)                 [list $rtl_dir/warp_unit.v]
 set src_map(blend_unit)                [list $rtl_dir/blend_unit.v]
 set src_map(vfi_synth)                 [list $rtl_dir/vfi_synth.v $rtl_dir/warp_unit.v $rtl_dir/blend_unit.v]
