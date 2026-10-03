@@ -1,17 +1,35 @@
 # VFI-DL Python environment — golden models + cocotb testbenches + comparison plots.
 # This project is RTL-first; Python is only for verification and analysis.
-# IMPORTANT: use Python 3.12 (or any 3.11–3.13). cocotb caps at 3.13, and the
-# system python here is 3.14 — do NOT build the venv with `python3`.
 #
-#   sudo dnf install -y python3.12
-#   python3.12 -m venv .venv && source .venv/bin/activate
-#   pip install --upgrade pip && pip install -r requirements.txt
+# IMPORTANT: use Python 3.11–3.13. cocotb caps at 3.13 while the system Python on
+# this machine is 3.14 — do NOT build the venv with plain `python3`.
 #
-# System tools (install via dnf / OpenROAD-flow-scripts, NOT pip):
-#   verilator, iverilog, yosys, and OpenROAD (see docs/ROADMAP.md Sprint 0).
+# Any 3.11–3.13 interpreter works:
+#   python3.12 -m venv .venv && .venv/bin/pip install -r requirements.txt
+#
+# If there is no suitable system interpreter, `uv` fetches a standalone build with
+# no sudo (CachyOS ships python311/python313 as packages — `pacman -S python313`;
+# on plain Arch those live in the AUR):
+#   uv python install 3.12
+#   uv venv --python 3.12 .venv
+#   uv pip install --python .venv/bin/python -r requirements.txt
+#   source .venv/bin/activate          # fish: .venv/bin/activate.fish
+# Note: a uv-created venv has no `pip` inside it — install with `uv pip install`.
+#
+# Verified 2026-10-03: all 14 cocotb suites pass on cocotb 2.1.0 + Icarus Verilog
+# 13.0, so cocotb 2.x is fine here (only `units=` -> `unit` deprecation warnings).
+#
+# System tools (distro packages, NOT pip — CachyOS/Arch names):
+#   sudo pacman -S iverilog verilator yosys
+#   plus OpenROAD if you want the Sky130 ASIC flow (see docs/ROADMAP.md Sprint 0).
 
 numpy
 cocotb>=1.8
 cocotb-bus
 matplotlib
 pytest            # cocotb test runner integration
+
+# tools/vfi_demo.py (FP16 reference for the --rtl PSNR log); not needed for the
+# cocotb suites. The demo prints this hint and exits if they are missing.
+onnx
+onnxruntime
