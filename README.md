@@ -14,6 +14,7 @@ golden/    numpy references — define the exact INT8 numerics the RTL must matc
 tb/        cocotb testbenches (one per module)
 syn/       synthesis flow (Vivado 2026.1; historical Yosys/Sky130 scripts kept)
 tools/     vfi_demo.py — two frames in, interpolated frame out
+export_weights.py  nano_v16.onnx -> INT8 .hex for the weight_mem load port
 samples/   demo frames
 reports/   writeup with measured numbers
 docs/      architecture notes, roadmap, benchmarking methodology
@@ -48,12 +49,28 @@ On this sequence the INT8 output matches its FP16 reference at 56.8 dB, and
 the INT8 quantization delta against the ground truth is unmeasurable — both
 paths score 26.4 dB vs the ground-truth middle frame.
 
-## Measured on hardware
+One caveat about this triplet, measured rather than assumed: the model's
+predicted flow for it is **sub-pixel (|max| 0.05 px)**, and its interpolated
+frame is bit-identical to a pure mask blend of the two inputs. So what the demo
+exercises end to end is the blend path; the bilinear warp is covered by
+`tb/test_warp_unit.py` against the numpy golden (identity, 1.25 px translate and
+random ±3 px flow fields) rather than by this sample.
 
-Synthesized with **Vivado 2026.1** on an Artix-7 XC7A100T (100 MHz constraint).
-Utilization, worst negative slack and Fmax for every module:
+## Synthesis results
+
+Synthesized with **Vivado 2026.1** on an Artix-7 XC7A100T (100 MHz constraint),
+per module at its own parameter defaults (16x16 frames for the warp path, 8x8
+for the CNN layers). Utilization, worst negative slack and Fmax for the 13
+modules that synthesize — synthesis and place-and-route reports, not board
+measurements; there has been no bring-up of this datapath on hardware:
 
 ![Vivado synthesis results](reports/plots/vivado_results.png)
+
+`encoder_slice` has no row there: its serial C_OUT=96 pointwise datapath hung
+Vivado's logic optimisation. That stage now runs the parallel MAC array
+(`pw_conv1x1_parallel`, 2 lanes for E1 and 4 for E2), which is verified in
+simulation and synthesizes on its own; re-running the encoder through the Vivado
+flow is the open item (`docs/ROADMAP.md`).
 
 ## Numerics
 
