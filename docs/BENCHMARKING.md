@@ -9,9 +9,16 @@ deliberately not claimed. Every number is reproducible from this repo.
 |---|---|
 | Bit-exact RTL vs golden | cocotb suites (`tb/`), all 14 passing |
 | Gate count / logic area | synthesis reports (`syn/`) |
-| Interpolated-frame quality | `tools/vfi_demo.py` on a Vimeo-90K test triplet: 50.8 dB INT8-RTL-vs-FP16; 26.4 dB vs ground truth |
+| Interpolated-frame quality | `tools/vfi_demo.py` on a Vimeo-90K test triplet: 56.8 dB INT8-RTL-vs-FP16; 26.4 dB vs ground truth |
 | Latency | cycle-accurate RTL (`valid/ready` contract) — fixed cycle count |
 | Memory footprint | parameter math (frame buffer, weight banks) |
+
+The demo's PSNR is computed in memory: the FP16 reference array against the
+dequantized INT8 output — that is the number it prints under `--rtl`. Comparing
+the two *saved* PNGs instead is a lossy second step, because the reference is
+then an 8-bit rounding of the array it used, and reads ~2 dB lower. Quote the
+printed value, not a PNG diff. (An older `save_png` truncated rather than
+rounded the reference and read ~6 dB lower still.)
 
 ## The comparison and its boundaries
 

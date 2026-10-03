@@ -44,7 +44,7 @@ Interpolated by the RTL warp+blend (INT8):
 
 ![interpolated (RTL INT8)](samples/mid_rtl.png)
 
-On this sequence the INT8 output matches its FP16 reference at 50.8 dB, and
+On this sequence the INT8 output matches its FP16 reference at 56.8 dB, and
 the INT8 quantization delta against the ground truth is unmeasurable — both
 paths score 26.4 dB vs the ground-truth middle frame.
 

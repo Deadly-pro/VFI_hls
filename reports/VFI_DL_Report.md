@@ -57,7 +57,7 @@ Highlights:
 - `warp_unit` / `blend_unit` / `vfi_synth` — bit-exact vs `grid_sample_ref.py`
   and `vfi_synth_ref.py`.
 - End-to-end demo (`tools/vfi_demo.py --rtl`): two input frames → RTL warp+blend
-  → interpolated frame, bit-exact against the fixed-point golden, 50.8 dB vs the
+  → interpolated frame, bit-exact against the fixed-point golden, 56.8 dB vs the
   FP16 ONNX reference on a Vimeo-90K test triplet (26.4 dB vs ground truth in
   both paths — INT8 quantization is unmeasurable here).
 
@@ -93,9 +93,10 @@ Fmax ≈ 31.4 MHz. Notes:
   serial-accumulator chain.
 - `warp_unit`/`vfi_synth` are frame-buffer-gather bound (~31–34 MHz); the four
   parallel reads feed the bilinear taps combinationally.
-- `encoder_slice` (serial C_OUT=96 PW) does not finish Vivado synthesis — the
-  serial-PW FSM blows up logic optimization; `pw_conv1x1_parallel` is the fix
-  and the parallel-PW layer itself synthesizes.
+- `encoder_slice` has no row: the serial C_OUT=96 PW FSM it used to carry hung
+  Vivado's logic optimisation. Its PW stage now runs `pw_conv1x1_parallel`
+  (PARALLEL_CO=2 for E1, 4 for E2), which is sim-verified and synthesizes on
+  its own, but the encoder top has not been re-synthesized since that change.
 - `weight_mem` maps to 0.5 BRAM tile (RAMB18) with no sequential logic;
   `blend_unit` is a 1-cycle mask blend with only output staging registers, so
   neither has a reportable setup path.
