@@ -63,18 +63,21 @@ def export_weight_mem_hex(weights: np.ndarray, biases: np.ndarray,
     Each line = one 8-bit signed value in hex (two's complement).
     """
     with open(output_path, 'w') as f:
+        # int() before the mask: numpy 2 rejects `np.int8(-1) & 0xFF` (255 is
+        # not representable in int8), which is what made this crash after it
+        # had already created a 0-byte file.
         if kernel_first:
             # Kernels first
             for w in weights.flatten():
-                f.write(f"{w & 0xFF:02x}\n")
+                f.write(f"{int(w) & 0xFF:02x}\n")
             # Then biases (truncated to 8-bit for demo; real impl needs 32-bit)
             for b in biases.flatten():
-                f.write(f"{b & 0xFF:02x}\n")
+                f.write(f"{int(b) & 0xFF:02x}\n")
         else:
             for b in biases.flatten():
-                f.write(f"{b & 0xFF:02x}\n")
+                f.write(f"{int(b) & 0xFF:02x}\n")
             for w in weights.flatten():
-                f.write(f"{w & 0xFF:02x}\n")
+                f.write(f"{int(w) & 0xFF:02x}\n")
 
     print(f"Exported {weights.size + biases.size} values to {output_path}")
 
@@ -218,16 +221,26 @@ def main():
         f.write("""#!/usr/bin/env python3
 # Auto-generated weight loading helper for testbenches
 # Usage: from load_all_weights import load_weights; load_weights(dut, 'weights/')
+#
+# NOTE (unverified against the RTL): each .hex holds one stage's kernels
+# followed by its biases, but ds_conv_layer_integrated decodes DW and PW into
+# separate windows of the same layer: DW at WL_BASE and PW at
+# WL_BASE + C_IN*9 + C_IN. Loading every file from address 0 therefore
+# overwrites. Pass the right base per file, and give encoder_slice's E2 the
+# WL_BASE of E1_WEIGHT_SPACE so the two stages do not collide. Wire this into
+# tb/test_encoder_slice.py before trusting it.
 
 import os
 
-def load_weights(dut, weight_dir):
+def load_weights(dut, weight_dir, bases=None):
     '''Load all .hex files into DUT weight_mem via wl_we/wl_addr/wl_data'''
     layers = ['e1_dw', 'e1_pw', 'e2_dw', 'e2_pw']
+    bases = bases or {}
     for layer in layers:
         hex_path = os.path.join(weight_dir, f"{layer}.hex")
         if not os.path.exists(hex_path):
             continue
+        base = bases.get(layer, 0)
         with open(hex_path) as hf:
             for addr, line in enumerate(hf):
                 val = int(line.strip(), 16)
@@ -235,7 +248,7 @@ def load_weights(dut, weight_dir):
                 if val >= 128:
                     val = val - 256
                 dut.wl_we.value = 1
-                dut.wl_addr.value = addr
+                dut.wl_addr.value = base + addr
                 dut.wl_data.value = val
                 # Note: testbench must await RisingEdge(dut.clk) after each
     print(f"Loaded {len(layers)} layers from {weight_dir}")
